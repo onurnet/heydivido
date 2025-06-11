@@ -1,7 +1,7 @@
-// components/Tabs/EventsList.tsx
+// src/components/Tabs/EventsList.tsx
 import React from 'react';
 import EventCard from './EventCard';
-import { Event } from '../../types/types';
+import type { Event } from '../../types/types';
 
 interface EventsListProps {
   events: Event[];

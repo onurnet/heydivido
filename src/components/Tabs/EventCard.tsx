@@ -1,7 +1,7 @@
-// components/Tabs/EventCard.tsx
+// src/components/Tabs/EventCard.tsx
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Event } from '../../types/types';
+import type { Event } from '../../types/types';
 
 interface EventCardProps {
   event: Event;

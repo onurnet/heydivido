@@ -1,6 +1,6 @@
-// components/Tabs/ExpenseCard.tsx
+// src/components/Tabs/ExpenseCard.tsx
 import React from 'react';
-import { Expense } from '../../types';
+import type { Expense } from '../../types/types';
 
 interface ExpenseCardProps {
   expense: Expense;

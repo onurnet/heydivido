@@ -1,3 +1,4 @@
+// src/components/Tabs/ExpensesList.tsx
 import React from 'react';
 import ExpenseCard from './ExpenseCard';
 import type { Expense } from '../../types/types';

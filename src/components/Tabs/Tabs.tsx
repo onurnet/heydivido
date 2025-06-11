@@ -1,4 +1,4 @@
-// components/Tabs/Tabs.tsx
+// src/components/Tabs/Tabs.tsx
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import EventsList from './EventsList';
