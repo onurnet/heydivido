@@ -926,11 +926,11 @@ const AddExpense: React.FC = () => {
       },
 
       shareInput: {
-        width: '80px',
-        padding: '6px 8px',
+        width: '90px', // Slightly wider for better usability
+        padding: '10px 12px', // Medium padding for modern feel
         background: 'rgba(255, 255, 255, 0.05)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderRadius: '6px',
+        borderRadius: '12px', // Larger border-radius for modern look
         fontSize: '14px',
         color: 'white',
         fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
@@ -938,7 +938,16 @@ const AddExpense: React.FC = () => {
         outline: 'none',
         textAlign: 'right' as const,
         boxSizing: 'border-box' as const,
-        WebkitAppearance: 'none' as const
+        WebkitAppearance: 'none' as const,
+        MozAppearance: 'textfield' as const, // Hide Firefox spinner
+        // Enhanced focus styling
+        ':focus': {
+          borderColor: '#00f5ff',
+          boxShadow:
+            '0 0 0 3px rgba(0, 245, 255, 0.1), 0 0 15px rgba(0, 245, 255, 0.2)',
+          background: 'rgba(255, 255, 255, 0.08)',
+          transform: 'scale(1.02)'
+        }
       },
 
       shareInputDisabled: {
@@ -1297,6 +1306,28 @@ const AddExpense: React.FC = () => {
           outline: 2px solid #00f5ff;
           outline-offset: 2px;
         }
+
+        /* Hide number input spinners completely */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+  display: none;
+}
+
+/* Firefox spinner hiding */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Additional focus enhancement for share inputs specifically */
+input[type="number"]:focus {
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: none;
+}
 
         /* PWA-style scrolling */
         * {
