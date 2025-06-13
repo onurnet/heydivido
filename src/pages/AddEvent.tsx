@@ -1,22 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom'; // ✅ useNavigate import'u eklendi
 import toast from 'react-hot-toast';
 import { supabase } from '../supabaseClient';
 import BottomNavigation from '../components/BottomNavigation/BottomNavigation';
 import GeoapifyAutocomplete from '../components/GeoapifyAutocomplete/GeoapifyAutocomplete';
-
-interface UserProfile {
-  divido_number: string;
-  email: string;
-  preferred_lang: string;
-  first_name: string;
-  last_name: string;
-  country: string;
-  city: string;
-  phone_number: string;
-  iban: string;
-  iban_currency: string;
-}
 
 interface DropdownOption {
   value: string;
@@ -188,17 +176,24 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   );
 };
 
-const Profile: React.FC = () => {
+const AddEvent: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate(); // ✅ useNavigate hook'u tanımlandı
+
+  const [name, setName] = useState('');
+  const [eventCategory, setEventCategory] = useState('');
+  const [description, setDescription] = useState('');
+  const [defaultCurrency, setDefaultCurrency] = useState('EUR');
+  const [country, setCountry] = useState('');
+  const [city, setCity] = useState('');
+  const [plannedStartDate, setPlannedStartDate] = useState('');
+  const [plannedDurationDays, setPlannedDurationDays] = useState<number | ''>(
+    ''
+  );
+
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   const currencies = [
     { code: 'EUR', name: 'Euro (EUR)' },
@@ -207,15 +202,27 @@ const Profile: React.FC = () => {
     { code: 'TRY', name: 'Turkish Lira (TRY)' }
   ];
 
-  const languageOptions: DropdownOption[] = [
-    { value: 'en', label: t('language_english') },
-    { value: 'tr', label: t('language_turkish') }
+  const eventCategories = [
+    { value: 'long_vacation', label: t('event_category_option_long_vacation') },
+    { value: 'short_trip', label: t('event_category_option_short_trip') },
+    {
+      value: 'dining_friends',
+      label: t('event_category_option_dining_friends')
+    },
+    { value: 'weekend_fun', label: t('event_category_option_weekend_fun') },
+    {
+      value: 'special_occasion',
+      label: t('event_category_option_special_occasion')
+    },
+    { value: 'other', label: t('event_category_option_other') }
   ];
 
   const currencyOptions: DropdownOption[] = currencies.map((currency) => ({
     value: currency.code,
     label: currency.name
   }));
+
+  const categoryOptions: DropdownOption[] = eventCategories;
 
   // PWA: Network status monitoring
   useEffect(() => {
@@ -239,172 +246,75 @@ const Profile: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
   };
 
-  const loadProfile = async () => {
-    try {
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.getSession();
-
-      console.log('DEBUG: FULL SESSION:', sessionData);
-
-      const userId = sessionData?.session?.user?.id;
-      console.log('DEBUG: SESSION USER ID:', userId);
-
-      if (!userId) {
-        setError(t('user_not_authenticated'));
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('auth_user_id', userId)
-        .single();
-
-      console.log('DEBUG: PROFILE DATA:', data);
-      console.log('DEBUG: PROFILE ERROR:', error);
-
-      if (error) {
-        setError(t('failed_load_profile'));
-        return;
-      }
-
-      setProfile(data);
-    } catch (err) {
-      console.error('DEBUG: LOAD PROFILE ERROR:', err);
-      setError(t('failed_load_profile'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-
-    try {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        toast.error('Logout failed');
-        return;
-      }
-
-      toast.success(t('logout_button'));
-
-      // Redirect to home page
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1000);
-    } catch (err) {
-      toast.error('Logout failed');
-    } finally {
-      setLoggingOut(false);
-    }
-  };
-
+  // ✅ Güncellenmiş handleSave fonksiyonu - Otomatik yönlendirme ile
   const handleSave = async () => {
-    if (!profile) return;
+    if (
+      !name ||
+      !eventCategory ||
+      !description ||
+      !defaultCurrency ||
+      !country ||
+      !city
+    ) {
+      toast.error(t('fill_required_fields'));
+      return;
+    }
 
     setSaving(true);
-    setError(null);
 
     try {
       const {
         data: { user }
       } = await supabase.auth.getUser();
+
       if (!user) {
-        setError(t('user_not_authenticated'));
+        toast.error(t('user_not_authenticated'));
         return;
       }
 
-      // Update user profile in users table
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          email: profile.email,
-          preferred_lang: profile.preferred_lang,
-          first_name: profile.first_name,
-          last_name: profile.last_name,
-          country: profile.country,
-          city: profile.city,
-          phone_number: profile.phone_number,
-          iban: profile.iban,
-          iban_currency: profile.iban_currency
-        })
-        .eq('auth_user_id', user.id);
-
-      if (updateError) {
-        setError(t('failed_update_profile'));
-        return;
-      }
-
-      // Update password if provided
-      if (newPassword.trim()) {
-        const { error: passwordError } = await supabase.auth.updateUser({
-          password: newPassword
-        });
-
-        if (passwordError) {
-          setError(t('failed_update_password'));
-          return;
-        }
-      }
-
-      // Update language preference
-      i18n.changeLanguage(profile.preferred_lang);
-
-      toast.success(t('profile_updated'));
-      setNewPassword('');
-    } catch (err) {
-      setError(t('failed_update_profile'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (!profile) return;
-
-    const confirmDelete = window.confirm(t('confirm_delete_account'));
-    if (!confirmDelete) return;
-
-    setDeleting(true);
-
-    try {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const now = new Date();
-      const timestamp = now.toISOString().replace(/[-:]/g, '').split('.')[0];
-      const deletedEmail = `deleted_${timestamp}_${profile.email}`;
-
-      const { error } = await supabase
-        .from('users')
-        .update({ email: deletedEmail })
-        .eq('auth_user_id', user.id);
+      // ✅ Insert işlemi ile birlikte yeni event'in id'sini alıyoruz
+      const { data, error } = await supabase
+        .from('events')
+        .insert([
+          {
+            name,
+            category: eventCategory, // ✅ Category alanı da kaydediliyor
+            description,
+            default_currency: defaultCurrency,
+            place_country: country,
+            place_city: city,
+            planned_start_date: plannedStartDate || null,
+            planned_duration_days: plannedDurationDays || null,
+            created_by: user.id,
+            status: 'active'
+          }
+        ])
+        .select('id')
+        .single(); // ✅ Yeni oluşturulan event'in id'sini tek bir kayıt olarak alıyoruz
 
       if (error) {
-        setError(t('failed_delete_account'));
+        console.error('Error inserting event:', error);
+        toast.error(t('failed_create_event'));
         return;
       }
 
-      toast.success(t('account_deleted'));
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 2000);
+      // ✅ Başarılı mesajı göster
+      toast.success(t('event_created_successfully'));
+
+      // ✅ Yeni oluşturulan event'in detay sayfasına yönlendir
+      navigate(`/events/${data.id}`);
+
+      // Form reset işlemi artık gerekli değil çünkü kullanıcı başka sayfaya gidiyor
+      // Ama isterseniz navigation'dan önce de yapabilirsiniz
     } catch (err) {
-      setError(t('failed_delete_account'));
+      console.error('Unexpected error:', err);
+      toast.error(t('failed_create_event'));
     } finally {
-      setDeleting(false);
+      setSaving(false);
     }
   };
 
@@ -429,7 +339,7 @@ const Profile: React.FC = () => {
         animation: 'float 8s ease-in-out infinite'
       },
 
-      profileContainer: {
+      addEventContainer: {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'flex-start',
@@ -489,29 +399,6 @@ const Profile: React.FC = () => {
         backgroundClip: 'text'
       },
 
-      dividoNumber: {
-        background: 'rgba(0, 245, 255, 0.1)',
-        border: '1px solid rgba(0, 245, 255, 0.2)',
-        borderRadius: '12px',
-        padding: '16px',
-        marginTop: '20px',
-        textAlign: 'center' as const
-      },
-
-      dividoLabel: {
-        color: '#00f5ff',
-        fontSize: '14px',
-        fontWeight: '600',
-        marginBottom: '4px'
-      },
-
-      dividoValue: {
-        color: 'white',
-        fontSize: '20px',
-        fontWeight: '700',
-        fontFamily: 'Monaco, monospace'
-      },
-
       content: {
         padding: '32px'
       },
@@ -552,23 +439,32 @@ const Profile: React.FC = () => {
         WebkitTapHighlightColor: 'transparent'
       },
 
+      textarea: {
+        width: '100%',
+        padding: '16px',
+        minHeight: '100px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '12px',
+        fontSize: '16px',
+        color: 'white',
+        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+        transition: 'all 0.3s ease',
+        outline: 'none',
+        boxSizing: 'border-box' as const,
+        resize: 'vertical' as const,
+        WebkitTapHighlightColor: 'transparent'
+      },
+
       inputFocus: {
         borderColor: '#00f5ff',
         boxShadow: '0 0 20px rgba(0, 245, 255, 0.2)',
         background: 'rgba(255, 255, 255, 0.08)'
       },
 
-      buttonContainer: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '12px',
-        marginTop: '20px',
-        width: '100%'
-      },
-
       button: {
         width: '100%',
-        padding: '16px 20px',
+        padding: '16px 32px',
         background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
         color: 'white',
         border: 'none',
@@ -577,40 +473,7 @@ const Profile: React.FC = () => {
         fontWeight: '600',
         cursor: 'pointer',
         transition: 'all 0.3s ease',
-        minHeight: '48px',
-        userSelect: 'none' as const,
-        WebkitTapHighlightColor: 'transparent',
-        WebkitAppearance: 'none' as const
-      },
-
-      logoutButton: {
-        width: '100%',
-        padding: '16px 20px',
-        background: 'linear-gradient(45deg, #6b7280, #9ca3af)',
-        color: 'white',
-        border: 'none',
-        borderRadius: '12px',
-        fontSize: '16px',
-        fontWeight: '600',
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
-        minHeight: '48px',
-        userSelect: 'none' as const,
-        WebkitTapHighlightColor: 'transparent',
-        WebkitAppearance: 'none' as const
-      },
-
-      deleteButton: {
-        width: '100%',
-        padding: '16px 20px',
-        background: 'linear-gradient(45deg, #ff006e, #ff4444)',
-        color: 'white',
-        border: 'none',
-        borderRadius: '12px',
-        fontSize: '16px',
-        fontWeight: '600',
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
+        marginTop: '24px',
         minHeight: '48px',
         userSelect: 'none' as const,
         WebkitTapHighlightColor: 'transparent',
@@ -625,38 +488,6 @@ const Profile: React.FC = () => {
       buttonHover: {
         transform: 'translateY(-2px)',
         boxShadow: '0 10px 30px rgba(0, 245, 255, 0.4)'
-      },
-
-      logoutButtonHover: {
-        transform: 'translateY(-2px)',
-        boxShadow: '0 10px 30px rgba(107, 114, 128, 0.4)'
-      },
-
-      deleteButtonHover: {
-        transform: 'translateY(-2px)',
-        boxShadow: '0 10px 30px rgba(255, 0, 110, 0.4)'
-      },
-
-      error: {
-        color: '#ff006e',
-        fontSize: '14px',
-        marginBottom: '16px',
-        padding: '12px',
-        background: 'rgba(255, 0, 110, 0.1)',
-        border: '1px solid rgba(255, 0, 110, 0.2)',
-        borderRadius: '8px',
-        textAlign: 'center' as const
-      },
-
-      loading: {
-        textAlign: 'center' as const,
-        color: '#00f5ff',
-        fontSize: '18px',
-        padding: '60px 20px',
-        minHeight: '200px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
       },
 
       languageSelector: {
@@ -725,7 +556,7 @@ const Profile: React.FC = () => {
     [isOnline]
   );
 
-  // Render floating elements - same for all states
+  // Render floating elements
   const FloatingElements = useMemo(
     () => (
       <>
@@ -778,7 +609,7 @@ const Profile: React.FC = () => {
     [styles.floatingElement]
   );
 
-  // Language selector - same for all states
+  // Language selector
   const LanguageSelector = useMemo(
     () => (
       <div style={styles.languageSelector}>
@@ -810,7 +641,7 @@ const Profile: React.FC = () => {
     ]
   );
 
-  // Common CSS - extracted to prevent re-renders
+  // Global styles
   const GlobalStyles = useMemo(
     () => (
       <style>
@@ -857,7 +688,8 @@ const Profile: React.FC = () => {
           }
         }
         
-        input::placeholder {
+        input::placeholder,
+        textarea::placeholder {
           color: rgba(255, 255, 255, 0.4);
         }
 
@@ -871,13 +703,17 @@ const Profile: React.FC = () => {
         input[type="email"],
         input[type="password"],
         input[type="text"],
-        input[type="tel"] {
+        input[type="tel"],
+        input[type="date"],
+        input[type="number"],
+        textarea {
           font-size: 16px !important;
         }
 
         /* Better focus indicators */
         button:focus-visible,
-        input:focus-visible {
+        input:focus-visible,
+        textarea:focus-visible {
           outline: 2px solid #00f5ff;
           outline-offset: 2px;
         }
@@ -891,7 +727,7 @@ const Profile: React.FC = () => {
           .form-grid {
             grid-template-columns: 1fr !important;
           }
-          .profile-container {
+          .add-event-container {
             padding: 0 1rem !important;
             padding-top: 2rem !important;
           }
@@ -903,15 +739,11 @@ const Profile: React.FC = () => {
             top: env(safe-area-inset-top, 20px) !important;
             right: env(safe-area-inset-right, 20px) !important;
           }
-          .button-container {
-            grid-template-columns: 1fr !important;
-            gap: 16px !important;
-          }
         }
 
         /* Support for PWA display modes */
         @media (display-mode: standalone) {
-          .profile-container {
+          .add-event-container {
             padding-top: calc(env(safe-area-inset-top, 20px) + 40px);
           }
         }
@@ -930,7 +762,7 @@ const Profile: React.FC = () => {
           .form-container {
             border: 2px solid rgba(255, 255, 255, 0.3) !important;
           }
-          input {
+          input, textarea {
             border: 2px solid rgba(255, 255, 255, 0.5) !important;
           }
         }
@@ -940,85 +772,6 @@ const Profile: React.FC = () => {
     []
   );
 
-  // Loading state - identical structure to loaded state
-  if (loading) {
-    return (
-      <div style={styles.container}>
-        {GlobalStyles}
-        {FloatingElements}
-        {showOfflineMessage && (
-          <div style={styles.offlineMessage}>📡 {t('offline_message')}</div>
-        )}
-        {LanguageSelector}
-
-        <div style={styles.profileContainer} className="profile-container">
-          <div style={styles.formContainer} className="form-container">
-            <div
-              style={styles.networkIndicator}
-              title={isOnline ? 'Online' : 'Offline'}
-            ></div>
-
-            <div style={styles.header}>
-              <h1 style={styles.title}>{t('profile_title')}</h1>
-            </div>
-
-            <div style={styles.content}>
-              <div style={styles.loading}>{t('loading_profile')}</div>
-            </div>
-          </div>
-        </div>
-
-        <BottomNavigation />
-      </div>
-    );
-  }
-
-  // Error state - identical structure to loaded state
-  if (!profile) {
-    return (
-      <div style={styles.container}>
-        {GlobalStyles}
-        {FloatingElements}
-        {showOfflineMessage && (
-          <div style={styles.offlineMessage}>📡 {t('offline_message')}</div>
-        )}
-        {LanguageSelector}
-
-        <div style={styles.profileContainer} className="profile-container">
-          <div style={styles.formContainer} className="form-container">
-            <div
-              style={styles.networkIndicator}
-              title={isOnline ? 'Online' : 'Offline'}
-            ></div>
-
-            <div style={styles.header}>
-              <h1 style={styles.title}>{t('profile_title')}</h1>
-            </div>
-
-            <div style={styles.content}>
-              <div
-                style={{
-                  ...styles.error,
-                  textAlign: 'center' as const,
-                  padding: '60px 20px',
-                  minHeight: '200px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                {t('failed_load_profile')}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <BottomNavigation />
-      </div>
-    );
-  }
-
-  // Main component render
   return (
     <div style={styles.container}>
       {GlobalStyles}
@@ -1030,7 +783,7 @@ const Profile: React.FC = () => {
 
       {LanguageSelector}
 
-      <div style={styles.profileContainer} className="profile-container">
+      <div style={styles.addEventContainer} className="add-event-container">
         <div style={styles.formContainer} className="form-container">
           <div
             style={styles.networkIndicator}
@@ -1052,62 +805,18 @@ const Profile: React.FC = () => {
             >
               ← {t('back_to_home')}
             </button>
-            <h1 style={styles.title}>{t('profile_title')}</h1>
-            <div style={styles.dividoNumber}>
-              <div style={styles.dividoLabel}>{t('divido_number_label')}</div>
-              <div style={styles.dividoValue}>{profile.divido_number}</div>
-            </div>
+            <h1 style={styles.title}>{t('add_new_event')}</h1>
           </div>
 
           <div style={styles.content}>
-            {error && <div style={styles.error}>{error}</div>}
-
-            <div style={styles.formGrid} className="form-grid">
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>{t('first_name_label')}</label>
-                <input
-                  style={styles.input}
-                  type="text"
-                  value={profile.first_name || ''}
-                  onChange={(e) =>
-                    setProfile({ ...profile, first_name: e.target.value })
-                  }
-                  placeholder={t('first_name_placeholder')}
-                  onFocus={(e) =>
-                    Object.assign(e.target.style, styles.inputFocus)
-                  }
-                  onBlur={(e) => Object.assign(e.target.style, styles.input)}
-                />
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>{t('last_name_label')}</label>
-                <input
-                  style={styles.input}
-                  type="text"
-                  value={profile.last_name || ''}
-                  onChange={(e) =>
-                    setProfile({ ...profile, last_name: e.target.value })
-                  }
-                  placeholder={t('last_name_placeholder')}
-                  onFocus={(e) =>
-                    Object.assign(e.target.style, styles.inputFocus)
-                  }
-                  onBlur={(e) => Object.assign(e.target.style, styles.input)}
-                />
-              </div>
-            </div>
-
             <div style={styles.inputGroup}>
-              <label style={styles.label}>{t('email_label')}</label>
+              <label style={styles.label}>{t('event_name_label')}</label>
               <input
                 style={styles.input}
-                type="email"
-                value={profile.email || ''}
-                onChange={(e) =>
-                  setProfile({ ...profile, email: e.target.value })
-                }
-                placeholder={t('email_placeholder')}
+                type="text"
+                placeholder={t('event_name_label')}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 onFocus={(e) =>
                   Object.assign(e.target.style, styles.inputFocus)
                 }
@@ -1115,17 +824,75 @@ const Profile: React.FC = () => {
               />
             </div>
 
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>{t('event_category_label')}</label>
+              <CustomDropdown
+                options={categoryOptions}
+                value={eventCategory}
+                onChange={setEventCategory}
+                placeholder={t('event_category_label')}
+              />
+            </div>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>{t('event_description_label')}</label>
+              <textarea
+                style={styles.textarea}
+                placeholder={t('event_description_label')}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onFocus={(e) =>
+                  Object.assign(e.target.style, styles.inputFocus)
+                }
+                onBlur={(e) => Object.assign(e.target.style, styles.textarea)}
+              />
+            </div>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>{t('default_currency_label')}</label>
+              <CustomDropdown
+                options={currencyOptions}
+                value={defaultCurrency}
+                onChange={setDefaultCurrency}
+                placeholder={t('default_currency_label')}
+              />
+            </div>
+
             <div style={styles.formGrid} className="form-grid">
               <div style={styles.inputGroup}>
-                <label style={styles.label}>{t('phone_number_label')}</label>
+                <label style={styles.label}>{t('country_label')}</label>
+                <GeoapifyAutocomplete
+                  type="country"
+                  value={country}
+                  onSelect={(countryCode, countryName) => {
+                    setCountry(countryCode);
+                  }}
+                />
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>{t('city_label')}</label>
+                <GeoapifyAutocomplete
+                  type="city"
+                  countryCode={country}
+                  value={city}
+                  onSelect={(cityName) => {
+                    setCity(cityName);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={styles.formGrid} className="form-grid">
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>
+                  {t('event_planned_start_date_label')}
+                </label>
                 <input
                   style={styles.input}
-                  type="tel"
-                  value={profile.phone_number || ''}
-                  onChange={(e) =>
-                    setProfile({ ...profile, phone_number: e.target.value })
-                  }
-                  placeholder={t('phone_placeholder')}
+                  type="date"
+                  value={plannedStartDate}
+                  onChange={(e) => setPlannedStartDate(e.target.value)}
                   onFocus={(e) =>
                     Object.assign(e.target.style, styles.inputFocus)
                   }
@@ -1135,157 +902,46 @@ const Profile: React.FC = () => {
 
               <div style={styles.inputGroup}>
                 <label style={styles.label}>
-                  {t('preferred_language_label')}
+                  {t('event_planned_duration_days_label')}
                 </label>
-                <CustomDropdown
-                  options={languageOptions}
-                  value={profile.preferred_lang || 'en'}
-                  onChange={(value) =>
-                    setProfile({ ...profile, preferred_lang: value })
-                  }
-                  placeholder={t('preferred_language_label')}
-                />
-              </div>
-            </div>
-
-            <div style={styles.formGrid} className="form-grid">
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>{t('country_label')}</label>
-                <GeoapifyAutocomplete
-                  type="country"
-                  value={profile.country || ''}
-                  onSelect={(countryCode, countryName) => {
-                    setProfile({ ...profile, country: countryCode });
-                  }}
-                />
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>{t('city_label')}</label>
-                <GeoapifyAutocomplete
-                  type="city"
-                  countryCode={profile.country || ''}
-                  value={profile.city || ''}
-                  onSelect={(cityName) => {
-                    setProfile({ ...profile, city: cityName });
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={styles.formGrid} className="form-grid">
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>IBAN</label>
                 <input
                   style={styles.input}
-                  type="text"
-                  value={profile.iban || ''}
+                  type="number"
+                  placeholder={t('event_planned_duration_days_label')}
+                  value={plannedDurationDays}
                   onChange={(e) =>
-                    setProfile({ ...profile, iban: e.target.value })
+                    setPlannedDurationDays(
+                      e.target.value ? parseInt(e.target.value, 10) : ''
+                    )
                   }
-                  placeholder={t('enter_your_iban')}
+                  min="1"
                   onFocus={(e) =>
                     Object.assign(e.target.style, styles.inputFocus)
                   }
                   onBlur={(e) => Object.assign(e.target.style, styles.input)}
                 />
               </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>IBAN Currency</label>
-                <CustomDropdown
-                  options={currencyOptions}
-                  value={profile.iban_currency || ''}
-                  onChange={(value) =>
-                    setProfile({ ...profile, iban_currency: value })
-                  }
-                  placeholder={t('iban_currency_placeholder')}
-                />
-              </div>
             </div>
 
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>{t('new_password_label')}</label>
-              <input
-                style={styles.input}
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder={t('password_placeholder')}
-                onFocus={(e) =>
-                  Object.assign(e.target.style, styles.inputFocus)
+            <button
+              style={{
+                ...styles.button,
+                ...(saving ? styles.buttonDisabled : {})
+              }}
+              onClick={handleSave}
+              disabled={saving}
+              onMouseEnter={(e) => {
+                if (!saving) {
+                  Object.assign(e.currentTarget.style, styles.buttonHover);
                 }
-                onBlur={(e) => Object.assign(e.target.style, styles.input)}
-              />
-            </div>
-
-            <div style={styles.buttonContainer} className="button-container">
-              <button
-                style={{
-                  ...styles.button,
-                  ...(saving ? styles.buttonDisabled : {})
-                }}
-                onClick={handleSave}
-                disabled={saving || loggingOut || deleting}
-                onMouseEnter={(e) => {
-                  if (!saving) {
-                    Object.assign(e.currentTarget.style, styles.buttonHover);
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                {saving ? t('updating') : t('update_button')}
-              </button>
-
-              <button
-                style={{
-                  ...styles.logoutButton,
-                  ...(loggingOut ? styles.buttonDisabled : {})
-                }}
-                onClick={handleLogout}
-                disabled={loggingOut || saving || deleting}
-                onMouseEnter={(e) => {
-                  if (!loggingOut) {
-                    Object.assign(
-                      e.currentTarget.style,
-                      styles.logoutButtonHover
-                    );
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                {loggingOut ? t('logging_out') : t('logout_button')}
-              </button>
-
-              <button
-                style={{
-                  ...styles.deleteButton,
-                  ...(deleting ? styles.buttonDisabled : {})
-                }}
-                onClick={handleDeleteAccount}
-                disabled={deleting || saving || loggingOut}
-                onMouseEnter={(e) => {
-                  if (!deleting) {
-                    Object.assign(
-                      e.currentTarget.style,
-                      styles.deleteButtonHover
-                    );
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                {deleting ? t('deleting') : t('delete_account_button')}
-              </button>
-            </div>
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              {saving ? t('saving_event') : t('save_event_button')}
+            </button>
           </div>
         </div>
       </div>
@@ -1295,4 +951,4 @@ const Profile: React.FC = () => {
   );
 };
 
-export default Profile;
+export default AddEvent;

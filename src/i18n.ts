@@ -30,7 +30,7 @@ const resources = {
       login_button: 'Login',
       login_loading: 'Logging in...',
       login_error: 'Error',
-      back_to_home: 'Back To Home',
+      back_to_home: 'Back',
       welcome_back: 'Welcome Back',
 
       // REGISTER PAGE STRINGS
@@ -63,6 +63,66 @@ const resources = {
       preferred_language_label: 'Preferred Language',
       language_english: 'English',
       language_turkish: 'Turkish',
+
+      // PROFILE PAGE STRINGS
+      logout_button: 'Logout',
+      logging_out: 'Logging out...',
+      enter_your_iban: 'Enter your IBAN',
+
+      // ADD EVENT PAGE STRINGS
+
+      event_name_label: 'Event Name',
+      event_description_label: 'Event Description',
+      event_currency_label: 'Event Currency',
+      event_planned_start_date_label: 'Planned Start Date',
+      event_planned_duration_days_label: 'Planned Duration (days)',
+      save_event_button: 'Save Event',
+      saving_event: 'Saving...',
+      event_created_successfully: 'Event created successfully',
+      failed_create_event: 'Failed to create event',
+      fill_required_fields: 'Please fill all required fields',
+      default_currency_label: 'Default Currency',
+      event_category_label: 'Event Category',
+      event_category_option_long_vacation: 'Long Vacation',
+      event_category_option_short_trip: 'Short Trip',
+      event_category_option_dining_friends: 'Dining with Friends',
+      event_category_option_weekend_fun: 'Weekend Fun',
+      event_category_option_special_occasion: 'Special Occasion Celebration',
+      event_category_option_other: 'Other',
+
+      //  EVENTS PAGE STRINGS
+      events_title: 'Events',
+      not_specified: 'Not Specified',
+      day: 'Day',
+      days: 'Days',
+
+      //  EVENT DETAIL STRINGS
+      event_details_title: 'Event Details',
+      event_date_label: 'Event Date',
+      event_duration_label: 'Duration',
+      event_location_label: 'Location',
+      edit_event_button: 'Edit',
+      share_event_button: 'Share',
+      expenses_section_title: 'Expenses',
+      add_expense_button: 'Add Expense',
+      no_expenses_yet: 'No Expenses Yet',
+
+      // ADD EXPENSE STRINGS
+
+      place_expense: 'Place Expense',
+      general_expense: 'General Expense',
+      select_place: 'Select Place',
+      amount_label: 'Amount',
+      paid_by_label: 'Paid By',
+      participants_label: 'Participants',
+      split_equal: 'Split Equally',
+      split_manual: 'Split Manually',
+      failed_create_expense: 'Failed to create expense',
+      expense_created_successfully: 'Expense created successfully',
+      saving_expense: 'Saving...',
+      save_expense_button: 'Save',
+      expense_type_label: 'Expense Type',
+      split_method_label: 'Split Method',
 
       // LANDING PAGE STRINGS
       hero: {
@@ -244,7 +304,7 @@ const resources = {
       login_button: 'Giriş Yap',
       login_loading: 'Giriş yapılıyor...',
       login_error: 'Hata',
-      back_to_home: 'Anasayfaya Dön',
+      back_to_home: 'Geri',
       welcome_back: 'Tekrar hoşgeldiniz',
 
       // REGISTER PAGE STRINGS
@@ -277,6 +337,66 @@ const resources = {
       preferred_language_label: 'Tercih Edilen Dil',
       language_english: 'İngilizce',
       language_turkish: 'Türkçe',
+
+      // PROFILE PAGE STRINGS
+      logout_button: 'Çıkış Yap',
+      logging_out: 'Çıkış Yapılıyor...',
+      enter_your_iban: 'IBAN bilgisi giriniz',
+
+      // ADD EVENT PAGE STRINGS
+
+      event_name_label: 'Etkinlik Adı',
+      event_description_label: 'Etkinlik Açıklaması',
+      event_currency_label: 'Etkinlik Temel Para Birimi',
+      event_planned_start_date_label: 'Planlanan Başlangıç Tarihi',
+      event_planned_duration_days_label: 'Planlanan Gün (gün sayısı)',
+      save_event_button: 'Etkinliği Kaydet',
+      saving_event: 'Kaydediliyor...',
+      event_created_successfully: 'Etkinlik başarıyla oluşturuldu',
+      failed_create_event: 'Etkinlik oluşturulamadı',
+      fill_required_fields: 'Lütfen gerekli tüm alanları doldurun',
+      default_currency_label: 'Etkinlik Para Birimi',
+      event_category_label: 'Etkinlik Kategorisi',
+      event_category_option_long_vacation: 'Uzun Tatil',
+      event_category_option_short_trip: 'Kısa Seyahat',
+      event_category_option_dining_friends: 'Arkadaşlarla Yemek',
+      event_category_option_weekend_fun: 'Haftasonu Eğlencesi',
+      event_category_option_special_occasion: 'Özel Gün Kutlaması',
+      event_category_option_other: 'Diğer',
+
+      //  EVENTS PAGE STRINGS
+      events_title: 'Etkinlikler',
+      not_specified: 'Belirtilmemiş',
+      day: 'Gün',
+      days: 'Gün',
+      no_expenses_yet: 'Henüz Bir Harcama Yok',
+
+      //  EVENT DETAIL STRINGS
+      event_details_title: 'Etkinlik Detayları',
+      event_date_label: 'Etkinlik Tarihi',
+      event_duration_label: 'Süre',
+      event_location_label: 'Konum',
+      edit_event_button: 'Düzenle',
+      share_event_button: 'Paylaş',
+      expenses_section_title: 'Harcamalar',
+      add_expense_button: 'Harcama Ekle',
+
+      // ADD EXPENSE STRINGS
+
+      place_expense: 'Mekan Harcaması',
+      general_expense: 'Genel Harcama',
+      select_place: 'Mekan Seçin',
+      amount_label: 'Tutar',
+      paid_by_label: 'Kim Ödedi?',
+      participants_label: 'Kimler İçin?',
+      split_equal: 'Eşit Böl',
+      split_manual: 'Manuel Böl',
+      failed_create_expense: 'Harcama kaydedilemedi',
+      expense_created_successfully: 'Harcama başarıyla kaydedildi',
+      saving_expense: 'Kaydediliyor...',
+      save_expense_button: 'Kaydet',
+      expense_type_label: 'Harcama Tipi',
+      split_method_label: 'Bölüştürme Şekli',
 
       // LANDING PAGE STRINGS
       hero: {

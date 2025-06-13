@@ -20,7 +20,7 @@ const BottomNavigation: React.FC = () => {
     display: 'flex',
     justifyContent: 'space-around',
     alignItems: 'center',
-    padding: '12px 0',
+    padding: '16px 0 20px 0',
     borderRadius: '20px 20px 0 0',
     boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
     zIndex: 9999
@@ -30,30 +30,45 @@ const BottomNavigation: React.FC = () => {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '4px',
+    gap: '4px', // 6px'den 4px'e azaltıldı
     color: '#7f8c8d',
-    fontSize: '11px',
-    fontWeight: 500,
+    fontSize: '11px', // 13px'den 11px'e küçültüldü
+    fontWeight: 500, // 600'den 500'e düşürüldü
     cursor: 'pointer',
-    transition: 'color 0.2s',
+    transition: 'all 0.2s ease',
     textDecoration: 'none',
-    padding: '8px'
+    padding: '6px 8px', // Padding azaltıldı
+    lineHeight: '1.1',
+    textAlign: 'center' as const,
+    minWidth: '50px' // 60px'den 50px'e azaltıldı
   };
 
   const activeNavItemStyle: React.CSSProperties = {
     ...navItemStyle,
-    color: '#4A90E2'
+    color: '#4A90E2',
+    fontWeight: 600, // 700'den 600'e düşürüldü
+    transform: 'scale(1.05)'
+  };
+
+  const iconStyle: React.CSSProperties = {
+    fontSize: '20px', // 22px'den 20px'e azaltıldı
+    marginBottom: '1px'
+  };
+
+  const activeIconStyle: React.CSSProperties = {
+    ...iconStyle,
+    fontSize: '22px' // 24px'den 22px'e azaltıldı
   };
 
   const addBtnStyle: React.CSSProperties = {
-    width: '60px',
+    width: '60px', // 64px'den 60px'e azaltıldı
     height: '60px',
     background:
       'linear-gradient(135deg, #00f5ff 0%, #4A90E2 50%, #ff006e 100%)',
     border: 'none',
     borderRadius: '50%',
     color: 'white',
-    fontSize: '28px',
+    fontSize: '28px', // 30px'den 28px'e azaltıldı
     fontWeight: '700',
     cursor: 'pointer',
     boxShadow: '0 8px 25px rgba(74, 144, 226, 0.4)',
@@ -70,7 +85,7 @@ const BottomNavigation: React.FC = () => {
 
   const addMenuStyle: React.CSSProperties = {
     position: 'absolute' as const,
-    bottom: '80px',
+    bottom: '85px', // 90px'den 85px'e azaltıldı
     left: '50%',
     transform: 'translateX(-50%)',
     background: 'rgba(26, 26, 46, 0.95)',
@@ -198,7 +213,9 @@ const BottomNavigation: React.FC = () => {
           style={isActive('/home') ? activeNavItemStyle : navItemStyle}
           onClick={() => handleNavigation('/home')}
         >
-          <i className="fas fa-home" style={{ fontSize: '20px' }}></i>
+          <span style={isActive('/home') ? activeIconStyle : iconStyle}>
+            🏠
+          </span>
           <span>{t('nav_home')}</span>
         </div>
 
@@ -206,7 +223,9 @@ const BottomNavigation: React.FC = () => {
           style={isActive('/events') ? activeNavItemStyle : navItemStyle}
           onClick={() => handleNavigation('/events')}
         >
-          <i className="fas fa-calendar-alt" style={{ fontSize: '20px' }}></i>
+          <span style={isActive('/events') ? activeIconStyle : iconStyle}>
+            📅
+          </span>
           <span>{t('nav_events')}</span>
         </div>
 
@@ -235,7 +254,9 @@ const BottomNavigation: React.FC = () => {
           style={isActive('/expenses') ? activeNavItemStyle : navItemStyle}
           onClick={() => handleNavigation('/expenses')}
         >
-          <i className="fas fa-receipt" style={{ fontSize: '20px' }}></i>
+          <span style={isActive('/expenses') ? activeIconStyle : iconStyle}>
+            💰
+          </span>
           <span>{t('nav_expenses')}</span>
         </div>
 
@@ -243,7 +264,9 @@ const BottomNavigation: React.FC = () => {
           style={isActive('/profile') ? activeNavItemStyle : navItemStyle}
           onClick={() => handleNavigation('/profile')}
         >
-          <i className="fas fa-user" style={{ fontSize: '20px' }}></i>
+          <span style={isActive('/profile') ? activeIconStyle : iconStyle}>
+            👤
+          </span>
           <span>{t('nav_account')}</span>
         </div>
       </nav>
@@ -265,6 +288,26 @@ const BottomNavigation: React.FC = () => {
           /* Smooth transitions */
           * {
             -webkit-tap-highlight-color: transparent;
+          }
+
+          /* Better text rendering for small sizes */
+          nav span {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+          }
+
+          /* Responsive adjustments */
+          @media (max-width: 350px) {
+            nav div {
+              padding: 4px 6px !important;
+            }
+            nav span {
+              font-size: 10px !important;
+            }
+            nav > div > span:first-child {
+              font-size: 18px !important;
+            }
           }
         `}
       </style>

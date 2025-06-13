@@ -15,22 +15,34 @@ import {
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
+import AddEvent from './pages/AddEvent';
+import EventDetails from './pages/EventDetails';
+import EventDetailsEdit from './pages/EventDetailsEdit';
+import Events from './pages/Events';
+import AddExpense from './pages/AddExpense'; // ✅ AddExpense import
 
-// ⬇️ Toast eklemek için import
 import { Toaster } from 'react-hot-toast';
-
-// ⬇️ Supabase import
 import { supabase } from './supabaseClient';
 
 function App() {
-  // 🚀 Check session and redirect to /home if needed
+  React.useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('AUTH STATE CHANGE:', event, session);
+      }
+    );
+
+    return () => {
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
+
   React.useEffect(() => {
     const checkSession = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       console.log('Session check:', sessionData);
 
       if (sessionData?.session?.access_token) {
-        // Eğer zaten HomePage'deysek tekrar yönlendirme yapma
         if (window.location.pathname !== '/home') {
           console.log('Redirecting to /home because session is active');
           window.location.href = '/home';
@@ -41,7 +53,6 @@ function App() {
     checkSession();
   }, []);
 
-  // 🚀 Sync language with preferred_lang from users table
   React.useEffect(() => {
     const syncLanguage = async () => {
       const {
@@ -69,7 +80,6 @@ function App() {
   return (
     <I18nextProvider i18n={i18n}>
       <Router>
-        {/* Toaster componentini en üste koyuyoruz */}
         <Toaster
           position="top-center"
           reverseOrder={false}
@@ -99,6 +109,15 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/add-event" element={<AddEvent />} />
+          <Route path="/events" element={<Events />} />
+          <Route path="/events/:eventId" element={<EventDetails />} />
+          <Route path="/events/:eventId/edit" element={<EventDetailsEdit />} />
+          <Route
+            path="/events/:eventId/add-expense"
+            element={<AddExpense />}
+          />{' '}
+          {/* ✅ AddExpense Page */}
         </Routes>
       </Router>
     </I18nextProvider>

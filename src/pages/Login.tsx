@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-// import { supabase } from '../supabaseClient';
+import toast from 'react-hot-toast';
+import { supabase } from '../supabaseClient';
 
 const Login: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -10,6 +11,7 @@ const Login: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [resetMessage, setResetMessage] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [resetLoading, setResetLoading] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = React.useState(false);
 
@@ -23,7 +25,6 @@ const Login: React.FC = () => {
     const handleOffline = () => {
       setIsOnline(false);
       setShowOfflineMessage(true);
-      // Hide offline message after 3 seconds
       setTimeout(() => setShowOfflineMessage(false), 3000);
     };
 
@@ -53,9 +54,17 @@ const Login: React.FC = () => {
 
   const handleLogin = async () => {
     if (!isOnline) {
-      setError(
-        'No internet connection. Please check your network and try again.'
-      );
+      setError(t('no_internet_connection'));
+      return;
+    }
+
+    if (!email.trim()) {
+      setError(t('email_required'));
+      return;
+    }
+
+    if (!password.trim()) {
+      setError(t('password_required'));
       return;
     }
 
@@ -63,52 +72,93 @@ const Login: React.FC = () => {
     setError(null);
     setResetMessage(null);
 
-    // Handle remember me
-    if (rememberMe) {
-      localStorage.setItem('rememberMe', 'true');
-      localStorage.setItem('rememberEmail', email);
-    } else {
-      localStorage.removeItem('rememberMe');
-      localStorage.removeItem('rememberEmail');
-    }
-
-    // Simulate API call
     try {
-      // Replace with your actual supabase auth logic:
-      // const { error } = await supabase.auth.signInWithPassword({
-      //   email,
-      //   password
-      // });
+      // Handle remember me
+      if (rememberMe) {
+        localStorage.setItem('rememberMe', 'true');
+        localStorage.setItem('rememberEmail', email);
+      } else {
+        localStorage.removeItem('rememberMe');
+        localStorage.removeItem('rememberEmail');
+      }
 
-      // Simulate loading
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Supabase authentication
+      const { data, error: authError } = await supabase.auth.signInWithPassword(
+        {
+          email: email.trim(),
+          password: password
+        }
+      );
 
-      // Simulate success - redirect to home
-      window.location.href = '/home';
+      if (authError) {
+        console.error('Login error:', authError);
+
+        // Handle specific error types
+        if (authError.message.includes('Invalid login credentials')) {
+          setError(t('invalid_credentials'));
+        } else if (authError.message.includes('Email not confirmed')) {
+          setError(t('email_not_confirmed'));
+        } else if (authError.message.includes('Too many requests')) {
+          setError(t('too_many_attempts'));
+        } else {
+          setError(authError.message);
+        }
+        return;
+      }
+
+      if (data.user && data.session) {
+        console.log('Login successful:', data.user.email);
+        toast.success(t('login_successful'));
+
+        // Redirect to home after successful login
+        setTimeout(() => {
+          window.location.href = '/home';
+        }, 500);
+      }
     } catch (err) {
-      setError('Login failed. Please check your credentials.');
+      console.error('Unexpected login error:', err);
+      setError(t('login_failed_unexpected'));
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      setError('Please enter your email to reset password.');
+      setError(t('email_required_reset'));
       return;
     }
 
+    if (!isOnline) {
+      setError(t('no_internet_connection'));
+      return;
+    }
+
+    setResetLoading(true);
     setError(null);
     setResetMessage(null);
 
     try {
-      // Replace with your actual supabase auth logic:
-      // await supabase.auth.resetPasswordForEmail(email);
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        {
+          redirectTo: `${window.location.origin}/reset-password`
+        }
+      );
 
-      // Simulate success
-      setResetMessage('Password reset email sent!');
+      if (resetError) {
+        console.error('Password reset error:', resetError);
+        setError(resetError.message);
+        return;
+      }
+
+      setResetMessage(t('password_reset_sent'));
+      toast.success(t('password_reset_sent'));
     } catch (err) {
-      setError('Failed to send password reset email. Please try again.');
+      console.error('Unexpected password reset error:', err);
+      setError(t('password_reset_failed'));
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -116,10 +166,16 @@ const Login: React.FC = () => {
     window.location.href = '/';
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && email && password && !loading && isOnline) {
+      handleLogin();
+    }
+  };
+
   const styles = {
     container: {
       minHeight: '100vh',
-      minHeight: '100dvh', // Dynamic viewport height for mobile
+      minHeight: '100dvh',
       width: '100%',
       background:
         'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%)',
@@ -130,7 +186,6 @@ const Login: React.FC = () => {
       overflow: 'hidden'
     },
 
-    // Floating background elements
     floatingElement: {
       position: 'absolute' as const,
       borderRadius: '50%',
@@ -160,8 +215,8 @@ const Login: React.FC = () => {
       background: 'transparent',
       border: '1px solid rgba(255, 255, 255, 0.2)',
       borderRadius: '12px',
-      padding: '12px 20px', // PWA touch-friendly size
-      minHeight: '44px', // PWA minimum touch target
+      padding: '12px 20px',
+      minHeight: '44px',
       color: '#b0b0b0',
       fontSize: '14px',
       cursor: 'pointer',
@@ -199,11 +254,11 @@ const Login: React.FC = () => {
     input: {
       width: '100%',
       padding: '1rem',
-      minHeight: '44px', // PWA touch target
+      minHeight: '44px',
       background: 'rgba(255, 255, 255, 0.05)',
       border: '1px solid rgba(255, 255, 255, 0.1)',
       borderRadius: '12px',
-      fontSize: '16px', // Prevents zoom on iOS
+      fontSize: '16px',
       color: 'white',
       fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
       transition: 'all 0.3s ease',
@@ -238,7 +293,7 @@ const Login: React.FC = () => {
       cursor: 'pointer',
       position: 'relative' as const,
       transition: 'all 0.3s ease',
-      minWidth: '18px', // Prevent shrinking
+      minWidth: '18px',
       WebkitAppearance: 'none' as const,
       appearance: 'none' as const
     },
@@ -257,7 +312,7 @@ const Login: React.FC = () => {
     button: {
       width: '100%',
       padding: '1rem',
-      minHeight: '48px', // PWA touch target for primary actions
+      minHeight: '48px',
       background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
       color: 'white',
       border: 'none',
@@ -322,8 +377,9 @@ const Login: React.FC = () => {
       padding: '4px 8px',
       borderRadius: '4px',
       userSelect: 'none' as const,
-      WebkitTapHighlightColor: 'transparent'
-    },
+      WebkitTapHighlightColor: 'transparent',
+      disabled: resetLoading
+    } as React.CSSProperties,
 
     languageSelector: {
       position: 'absolute' as const,
@@ -346,7 +402,7 @@ const Login: React.FC = () => {
       fontSize: '12px',
       fontWeight: '600',
       padding: '6px 10px',
-      minHeight: '32px', // PWA touch target
+      minHeight: '32px',
       borderRadius: '12px',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
@@ -359,7 +415,6 @@ const Login: React.FC = () => {
       color: 'white'
     },
 
-    // PWA-specific styles
     offlineMessage: {
       position: 'fixed' as const,
       top: 'env(safe-area-inset-top, 20px)',
@@ -428,9 +483,7 @@ const Login: React.FC = () => {
 
       {/* Network Status Indicator & Offline Message */}
       {showOfflineMessage && (
-        <div style={styles.offlineMessage}>
-          📡 You're offline. Check your connection.
-        </div>
+        <div style={styles.offlineMessage}>📡 {t('offline_message')}</div>
       )}
 
       {/* Language Selector */}
@@ -498,6 +551,11 @@ const Login: React.FC = () => {
               transform: translateX(-50%) translateY(0);
               opacity: 1;
             }
+          }
+
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
           }
 
           input::placeholder {
@@ -572,11 +630,6 @@ const Login: React.FC = () => {
             }
           }
 
-          /* Dark mode support */
-          @media (prefers-color-scheme: dark) {
-            /* Already dark theme, but could add system overrides here */
-          }
-
           /* Reduce motion for accessibility */
           @media (prefers-reduced-motion: reduce) {
             * {
@@ -632,6 +685,7 @@ const Login: React.FC = () => {
               placeholder={t('email_placeholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onKeyPress={handleKeyPress}
               style={styles.input}
               onFocus={(e) => {
                 Object.assign(e.target.style, styles.inputFocus);
@@ -648,6 +702,7 @@ const Login: React.FC = () => {
               placeholder={t('password_placeholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyPress={handleKeyPress}
               style={styles.input}
               onFocus={(e) => {
                 Object.assign(e.target.style, styles.inputFocus);
@@ -672,14 +727,10 @@ const Login: React.FC = () => {
                 ...(rememberMe ? styles.checkboxChecked : {})
               }}
             />
-            <label style={styles.checkboxLabel}>Remember Me</label>
+            <label style={styles.checkboxLabel}>{t('remember_me')}</label>
           </div>
 
-          {error && (
-            <div style={styles.error}>
-              {t('login_error')}: {error}
-            </div>
-          )}
+          {error && <div style={styles.error}>{error}</div>}
 
           {resetMessage && (
             <div style={styles.successMessage}>{resetMessage}</div>
@@ -735,31 +786,31 @@ const Login: React.FC = () => {
           {/* Forgot Password Link */}
           <div style={styles.forgotPasswordLink}>
             <button
-              style={styles.forgotPasswordButton}
+              style={{
+                ...styles.forgotPasswordButton,
+                opacity: resetLoading ? 0.5 : 1,
+                cursor: resetLoading ? 'not-allowed' : 'pointer'
+              }}
               onClick={handleForgotPassword}
+              disabled={resetLoading}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#ff006e';
-                e.currentTarget.style.background = 'rgba(255, 0, 110, 0.1)';
+                if (!resetLoading) {
+                  e.currentTarget.style.color = '#ff006e';
+                  e.currentTarget.style.background = 'rgba(255, 0, 110, 0.1)';
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#00f5ff';
-                e.currentTarget.style.background = 'transparent';
+                if (!resetLoading) {
+                  e.currentTarget.style.color = '#00f5ff';
+                  e.currentTarget.style.background = 'transparent';
+                }
               }}
             >
-              Forgot Password?
+              {resetLoading ? t('sending') : t('forgot_password')}
             </button>
           </div>
         </div>
       </div>
-
-      <style>
-        {`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}
-      </style>
     </div>
   );
 };
