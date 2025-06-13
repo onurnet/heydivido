@@ -188,6 +188,10 @@ const AddExpense: React.FC = () => {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
 
+  const [lockedParticipants, setLockedParticipants] = useState<Set<string>>(
+    new Set()
+  );
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
 
@@ -536,19 +540,33 @@ const AddExpense: React.FC = () => {
     const updatedShares = { ...participantShares };
     updatedShares[userId] = newShare;
 
-    // Calculate remaining amount
-    const allocatedAmount = Object.values(updatedShares).reduce(
-      (sum, share) => sum + (share || 0),
-      0
-    );
+    // Add this participant to lockedParticipants
+    setLockedParticipants((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(userId);
+      return newSet;
+    });
+
+    // Recalculate remaining amount
+    const allocatedAmount = participants.reduce((sum, id) => {
+      if (lockedParticipants.has(id) || id === userId) {
+        return sum + (updatedShares[id] || 0);
+      }
+      return sum;
+    }, 0);
+
     const remainingAmount = amount - allocatedAmount;
 
-    // Distribute remaining amount among other participants
-    const otherParticipants = participants.filter((id) => id !== userId);
-    if (otherParticipants.length > 0 && remainingAmount !== 0) {
-      const sharePerOther = remainingAmount / otherParticipants.length;
-      otherParticipants.forEach((id) => {
-        updatedShares[id] = sharePerOther > 0 ? sharePerOther : 0;
+    // Distribute remaining amount among unlocked participants
+    const unlockedParticipants = participants.filter(
+      (id) => !lockedParticipants.has(id) && id !== userId
+    );
+
+    if (unlockedParticipants.length > 0) {
+      const sharePerUnlocked = remainingAmount / unlockedParticipants.length;
+
+      unlockedParticipants.forEach((id) => {
+        updatedShares[id] = sharePerUnlocked > 0 ? sharePerUnlocked : 0;
       });
     }
 
