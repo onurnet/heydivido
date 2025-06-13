@@ -95,6 +95,8 @@ const resources = {
       not_specified: 'Not Specified',
       day: 'Day',
       days: 'Days',
+      my_events_title: 'My Events',
+      events_you_participate_in: 'Events you participate in',
 
       //  EVENT DETAIL STRINGS
       event_details_title: 'Event Details',
@@ -106,6 +108,82 @@ const resources = {
       expenses_section_title: 'Expenses',
       add_expense_button: 'Add Expense',
       no_expenses_yet: 'No Expenses Yet',
+
+      //  EVENT DETAIL EDIT STRINGS
+      only_admin_can_edit: 'Only admins can edit this event',
+      event_participants: 'Event Participants',
+      no_participants_yet: 'No participants yet',
+      role_admin: 'Admin',
+      role_participant: 'Participant',
+      joined: 'Joined',
+      remove: 'Remove',
+      removing: 'Removing...',
+      cannot_remove_yourself: 'You cannot remove yourself',
+      confirm_remove_participant: 'Remove {{name}} from the event?',
+      participant_removed_successfully: 'Participant removed successfully',
+      failed_remove_participant: 'Failed to remove participant',
+      make_passive_button: 'Make Passive',
+      delete_event_button: 'Delete Event',
+      confirm_delete_event: 'Are you sure you want to delete this event?',
+      confirm_make_passive_event:
+        'Are you sure you want to make this event passive?',
+      event_deleted_successfully: 'Event deleted successfully',
+      event_made_passive_successfully: 'Event made passive successfully',
+      failed_delete_event: 'Failed to delete event',
+      failed_make_passive_event: 'Failed to make event passive',
+      back_to_event: 'Back to Event',
+      failed_load_participants: 'Failed to load participants',
+      role_member: 'Member',
+      event_description_label: 'Event Description',
+      event_description_placeholder: 'Describe your event...',
+
+      // Invite system
+      youre_invited: "You're Invited!",
+      join_event_invitation: 'Join this event to track expenses together',
+      invalid_or_expired_invitation: 'Invalid or expired invitation',
+      invitation_not_found_or_expired: 'Invitation not found or has expired',
+      loading_invitation: 'Loading invitation...',
+      login_required_to_join_event:
+        'Please login or register to join this event',
+      login_to_join: 'Login to Join Event',
+      register_to_join: 'Create Account to Join',
+      join_event: 'Join Event',
+      joining_event: 'Joining...',
+      already_joined_event: "You're already a member of this event",
+      successfully_joined_event: 'Successfully joined the event!',
+      failed_join_event: 'Failed to join event',
+      please_login_to_join: 'Please login to join this event',
+      failed_process_invitation: 'Failed to process invitation',
+      only_admin_can_invite: 'Only event admins can create invite links',
+      existing_invite_link_copied: 'Existing invite link copied to clipboard',
+      failed_create_invite_link: 'Failed to create invite link',
+      invite_link_created: 'Invite link created successfully',
+      invite_link_copied_to_clipboard: 'Invite link copied to clipboard',
+      share_event_button: 'Share & Invite',
+      edit_event_button: 'Edit Event',
+      joining_event: "You're joining this event:",
+      after_registration_auto_join:
+        "You'll automatically join after registration",
+      check_email_to_join_event:
+        'Check your email to confirm and join the event!',
+      registration_successful_check_email:
+        'Registration successful! Check your email to confirm.',
+
+      //EVENT INVITE PAGE
+
+      event_invitation: 'Event Invitation',
+      youve_been_invited_to: "You've been invited to",
+      accept_invitation: 'Accept Invitation',
+      decline_invitation: 'Decline',
+      loading_invitation: 'Loading invitation...',
+      invitation_expired: 'This invitation has expired',
+      invitation_not_found: 'Invitation not found',
+      please_login_first: 'Please login first',
+      already_participant: "You're already a participant!",
+      successfully_joined_event: 'Successfully joined the event!',
+      failed_join_event: 'Failed to join event',
+      invitation_declined: 'Invitation declined',
+      processing: 'Processing...',
 
       // ADD EXPENSE STRINGS
 
@@ -370,6 +448,8 @@ const resources = {
       day: 'Gün',
       days: 'Gün',
       no_expenses_yet: 'Henüz Bir Harcama Yok',
+      my_events_title: 'Etkinliklerim',
+      events_you_participate_in: 'Katılımcısı olduğunuz etkinlikler',
 
       //  EVENT DETAIL STRINGS
       event_details_title: 'Etkinlik Detayları',
@@ -380,6 +460,84 @@ const resources = {
       share_event_button: 'Paylaş',
       expenses_section_title: 'Harcamalar',
       add_expense_button: 'Harcama Ekle',
+
+      //  EVENT DETAIL EDIT STRINGS
+      only_admin_can_edit: 'Sadece yöneticiler bu etkinliği düzenleyebilir',
+      event_participants: 'Etkinlik Katılımcıları',
+      no_participants_yet: 'Henüz katılımcı yok',
+      role_admin: 'Yönetici',
+      role_participant: 'Katılımcı',
+      joined: 'Katıldı',
+      remove: 'Kaldır',
+      removing: 'Kaldırılıyor...',
+      cannot_remove_yourself: 'Kendinizi kaldıramazsınız',
+      confirm_remove_participant:
+        '{{name}} kullanıcısını etkinlikten kaldırmak istiyor musunuz?',
+      participant_removed_successfully: 'Katılımcı başarıyla kaldırıldı',
+      failed_remove_participant: 'Katılımcı kaldırılamadı',
+      make_passive_button: 'Pasif Yap',
+      delete_event_button: 'Etkinliği Sil',
+      confirm_delete_event: 'Bu etkinliği silmek istediğinize emin misiniz?',
+      confirm_make_passive_event:
+        'Bu etkinliği pasif yapmak istediğinize emin misiniz?',
+      event_deleted_successfully: 'Etkinlik başarıyla silindi',
+      event_made_passive_successfully: 'Etkinlik başarıyla pasif yapıldı',
+      failed_delete_event: 'Etkinlik silinemedi',
+      failed_make_passive_event: 'Etkinlik pasif yapılamadı',
+      back_to_event: 'Etkinliğe Geri Dön',
+      failed_load_participants: 'Katılımcılar yüklenemedi',
+      role_member: 'Katılımcı',
+      event_description_label: 'Etkinlik Açıklaması',
+      event_description_placeholder: 'Etkinliğinizi tanımlayın',
+
+      // Invite system
+      youre_invited: 'Davet Edildiniz!',
+      join_event_invitation:
+        'Bu etkinliğe katılın ve masrafları birlikte takip edin',
+      invalid_or_expired_invitation: 'Geçersiz veya süresi dolmuş davetiye',
+      invitation_not_found_or_expired: 'Davetiye bulunamadı veya süresi dolmuş',
+      loading_invitation: 'Davetiye yükleniyor...',
+      login_required_to_join_event:
+        'Bu etkinliğe katılmak için giriş yapın veya kayıt olun',
+      login_to_join: 'Etkinliğe Katılmak İçin Giriş Yap',
+      register_to_join: 'Katılmak İçin Hesap Oluştur',
+      join_event: 'Etkinliğe Katıl',
+      joining_event: 'Katılıyor...',
+      already_joined_event: 'Bu etkinliğin zaten üyesisiniz',
+      successfully_joined_event: 'Etkinliğe başarıyla katıldınız!',
+      failed_join_event: 'Etkinliğe katılamadı',
+      please_login_to_join: 'Bu etkinliğe katılmak için giriş yapın',
+      failed_process_invitation: 'Davetiye işlenemedi',
+      only_admin_can_invite:
+        'Sadece etkinlik yöneticileri davet linki oluşturabilir',
+      existing_invite_link_copied: 'Mevcut davet linki panoya kopyalandı',
+      failed_create_invite_link: 'Davet linki oluşturulamadı',
+      invite_link_created: 'Davet linki başarıyla oluşturuldu',
+      invite_link_copied_to_clipboard: 'Davet linki panoya kopyalandı',
+      share_event_button: 'Paylaş ve Davet Et',
+      edit_event_button: 'Etkinliği Düzenle',
+      joining_event: 'Bu etkinliğe katılıyorsunuz:',
+      after_registration_auto_join: 'Kayıt sonrası otomatik katılacaksınız',
+      check_email_to_join_event:
+        'E-postanızı kontrol edin ve etkinliğe katılın!',
+      registration_successful_check_email:
+        'Kayıt başarılı! E-postanızı kontrol edin.',
+
+      //EVENT INVITE PAGE
+
+      event_invitation: 'Etkinlik Davetiyesi',
+      youve_been_invited_to: 'Bir etkinliğe davet edildiniz',
+      accept_invitation: 'Daveti Kabul Et',
+      decline_invitation: 'Reddet',
+      loading_invitation: 'Davetiye yükleniyor...',
+      invitation_expired: 'Bu davetiyenin süresi dolmuş',
+      invitation_not_found: 'Davet bulunamadı',
+      please_login_first: 'Lütfen önce giriş yapın',
+      already_participant: 'Zaten bu etkinliğe katıldınız!',
+      successfully_joined_event: 'Etkinliğe başarıyla katıldınız!',
+      failed_join_event: 'Etkinliğe katılamadı',
+      invitation_declined: 'Davet reddedildi',
+      processing: 'İşleniyor...',
 
       // ADD EXPENSE STRINGS
 

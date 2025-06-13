@@ -19,6 +19,19 @@ interface CustomDropdownProps {
   style?: React.CSSProperties;
 }
 
+interface EventParticipant {
+  id: string;
+  user_id: string;
+  role: 'admin' | 'participant';
+  status: string;
+  joined_at: string;
+  users: {
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+}
+
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
   options,
   value,
@@ -185,14 +198,23 @@ const EventDetailsEdit: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
   const [plannedStartDate, setPlannedStartDate] = useState('');
   const [plannedDurationDays, setPlannedDurationDays] = useState<number | ''>(
     ''
+  );
+
+  // ✅ Katılımcı listesi için state
+  const [participants, setParticipants] = useState<EventParticipant[]>([]);
+  const [removingParticipant, setRemovingParticipant] = useState<string | null>(
+    null
   );
 
   const eventCategories = [
@@ -236,12 +258,63 @@ const EventDetailsEdit: React.FC = () => {
 
   useEffect(() => {
     if (eventId) {
-      loadEvent();
+      checkUserAndLoadData();
     }
   }, [eventId]);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
+  };
+
+  // ✅ Kullanıcı kontrolü ve veri yükleme
+  const checkUserAndLoadData = async () => {
+    try {
+      setLoading(true);
+
+      // Kullanıcı kimlik kontrolü
+      const {
+        data: { user },
+        error: authError
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        console.error('Auth error:', authError);
+        toast.error(t('user_not_authenticated'));
+        navigate('/login');
+        return;
+      }
+
+      setCurrentUser(user);
+
+      // Kullanıcının bu etkinlikte admin yetkisi var mı kontrol et
+      const { data: participantData, error: participantError } = await supabase
+        .from('event_participants')
+        .select('role')
+        .eq('event_id', eventId)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (
+        participantError ||
+        !participantData ||
+        participantData.role !== 'admin'
+      ) {
+        toast.error(t('only_admin_can_edit'));
+        navigate(`/events/${eventId}`);
+        return;
+      }
+
+      setIsAdmin(true);
+      await loadEvent();
+      await loadParticipants();
+    } catch (err) {
+      console.error('Error checking user:', err);
+      toast.error(t('authentication_failed'));
+      navigate('/login');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadEvent = async () => {
@@ -259,6 +332,7 @@ const EventDetailsEdit: React.FC = () => {
       }
 
       setName(data.name || '');
+      setDescription(data.description || '');
       setCategory(data.category || '');
       setCountry(data.place_country || '');
       setCity(data.place_city || '');
@@ -267,8 +341,101 @@ const EventDetailsEdit: React.FC = () => {
     } catch (err) {
       console.error('Error loading event:', err);
       toast.error(t('failed_load_event'));
+    }
+  };
+
+  // ✅ Katılımcıları yükle
+  const loadParticipants = async () => {
+    try {
+      // Önce participants'ları yükle
+      const { data: participantsData, error: participantsError } =
+        await supabase
+          .from('event_participants')
+          .select('id, user_id, role, status, joined_at')
+          .eq('event_id', eventId)
+          .eq('status', 'active')
+          .order('joined_at', { ascending: true });
+
+      if (participantsError) {
+        console.error('Error loading participants:', participantsError);
+        toast.error(t('failed_load_participants'));
+        return;
+      }
+
+      if (!participantsData || participantsData.length === 0) {
+        setParticipants([]);
+        return;
+      }
+
+      // Sonra her participant için user bilgilerini yükle
+      const participantsWithUsers = await Promise.all(
+        participantsData.map(async (participant) => {
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('first_name, last_name, email')
+            .eq('auth_user_id', participant.user_id)
+            .single();
+
+          return {
+            ...participant,
+            users: userData || {
+              first_name: '',
+              last_name: '',
+              email: 'Unknown User'
+            }
+          };
+        })
+      );
+
+      setParticipants(participantsWithUsers);
+    } catch (err) {
+      console.error('Error loading participants:', err);
+      toast.error(t('failed_load_participants'));
+    }
+  };
+
+  // ✅ Katılımcı çıkar
+  const handleRemoveParticipant = async (
+    participantId: string,
+    participantUserId: string
+  ) => {
+    if (!currentUser || participantUserId === currentUser.id) {
+      toast.error(t('cannot_remove_yourself'));
+      return;
+    }
+
+    const participant = participants.find((p) => p.id === participantId);
+    if (!participant) return;
+
+    const userName =
+      `${participant.users.first_name} ${participant.users.last_name}`.trim();
+
+    // Onay iste
+    if (!window.confirm(t('confirm_remove_participant', { name: userName }))) {
+      return;
+    }
+
+    try {
+      setRemovingParticipant(participantId);
+
+      const { error } = await supabase
+        .from('event_participants')
+        .update({ status: 'removed' })
+        .eq('id', participantId);
+
+      if (error) {
+        console.error('Error removing participant:', error);
+        toast.error(t('failed_remove_participant'));
+        return;
+      }
+
+      toast.success(t('participant_removed_successfully'));
+      await loadParticipants(); // Listeyi yenile
+    } catch (err) {
+      console.error('Error removing participant:', err);
+      toast.error(t('failed_remove_participant'));
     } finally {
-      setLoading(false);
+      setRemovingParticipant(null);
     }
   };
 
@@ -285,6 +452,7 @@ const EventDetailsEdit: React.FC = () => {
         .from('events')
         .update({
           name,
+          description,
           category,
           place_country: country,
           place_city: city,
@@ -300,12 +468,70 @@ const EventDetailsEdit: React.FC = () => {
       }
 
       toast.success(t('event_updated_successfully'));
-
-      // İsteğe bağlı → event detay sayfasına geri dön
       navigate(`/events/${eventId}`);
     } catch (err) {
       console.error('Error updating event:', err);
       toast.error(t('failed_update_event'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ✅ Etkinliği sil (status = deleted)
+  const handleDeleteEvent = async () => {
+    if (!window.confirm(t('confirm_delete_event'))) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const { error } = await supabase
+        .from('events')
+        .update({ status: 'deleted' })
+        .eq('id', eventId);
+
+      if (error) {
+        console.error('Error deleting event:', error);
+        toast.error(t('failed_delete_event'));
+        return;
+      }
+
+      toast.success(t('event_deleted_successfully'));
+      navigate('/events');
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      toast.error(t('failed_delete_event'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ✅ Etkinliği pasif yap (status = passive)
+  const handleMakePassive = async () => {
+    if (!window.confirm(t('confirm_make_passive_event'))) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const { error } = await supabase
+        .from('events')
+        .update({ status: 'passive' })
+        .eq('id', eventId);
+
+      if (error) {
+        console.error('Error making event passive:', error);
+        toast.error(t('failed_make_passive_event'));
+        return;
+      }
+
+      toast.success(t('event_made_passive_successfully'));
+      navigate(`/events/${eventId}`);
+    } catch (err) {
+      console.error('Error making event passive:', err);
+      toast.error(t('failed_make_passive_event'));
     } finally {
       setSaving(false);
     }
@@ -338,7 +564,7 @@ const EventDetailsEdit: React.FC = () => {
 
       editEventContainer: {
         width: '100%',
-        maxWidth: '500px',
+        maxWidth: '600px',
         position: 'relative' as const,
         zIndex: 2
       },
@@ -430,10 +656,127 @@ const EventDetailsEdit: React.FC = () => {
         WebkitTapHighlightColor: 'transparent'
       },
 
+      textarea: {
+        width: '100%',
+        padding: '14px',
+        minHeight: '80px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '10px',
+        fontSize: '16px',
+        color: 'white',
+        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+        transition: 'all 0.3s ease',
+        outline: 'none',
+        boxSizing: 'border-box' as const,
+        resize: 'vertical' as const,
+        WebkitTapHighlightColor: 'transparent'
+      },
+
       inputFocus: {
         borderColor: '#00f5ff',
         boxShadow: '0 0 20px rgba(0, 245, 255, 0.2)',
         background: 'rgba(255, 255, 255, 0.08)'
+      },
+
+      // ✅ Katılımcı listesi stilleri
+      participantsSection: {
+        marginTop: '32px',
+        marginBottom: '24px'
+      },
+
+      sectionTitle: {
+        fontSize: '1.2rem',
+        fontWeight: '600',
+        color: 'white',
+        marginBottom: '16px',
+        background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text'
+      },
+
+      participantsList: {
+        background: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        overflow: 'hidden'
+      },
+
+      participantItem: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        padding: '16px',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+        transition: 'all 0.3s ease',
+        gap: '12px',
+        minHeight: '60px'
+      },
+
+      participantInfo: {
+        flex: 1,
+        minWidth: 0, // Important for text truncation
+        overflow: 'hidden'
+      },
+
+      participantName: {
+        color: 'white',
+        fontSize: '15px',
+        fontWeight: '600',
+        marginBottom: '4px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap' as const
+      },
+
+      participantDetails: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: '13px',
+        lineHeight: '1.4',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap' as const
+      },
+
+      participantActions: {
+        display: 'flex',
+        flexDirection: 'row' as const,
+        alignItems: 'center',
+        gap: '8px',
+        flexShrink: 0
+      },
+
+      participantRole: {
+        background: 'rgba(255, 107, 107, 0.2)',
+        color: '#ff6b6b',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        fontSize: '11px',
+        fontWeight: '600',
+        textTransform: 'uppercase' as const,
+        whiteSpace: 'nowrap' as const
+      },
+
+      removeButton: {
+        background: 'rgba(255, 107, 107, 0.2)',
+        color: '#ff6b6b',
+        border: '1px solid rgba(255, 107, 107, 0.3)',
+        borderRadius: '8px',
+        padding: '6px 12px',
+        fontSize: '12px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        userSelect: 'none' as const,
+        WebkitTapHighlightColor: 'transparent',
+        whiteSpace: 'nowrap' as const,
+        minWidth: '70px'
+      },
+
+      removeButtonDisabled: {
+        opacity: 0.5,
+        cursor: 'not-allowed'
       },
 
       button: {
@@ -447,7 +790,7 @@ const EventDetailsEdit: React.FC = () => {
         fontWeight: '600',
         cursor: 'pointer',
         transition: 'all 0.3s ease',
-        marginTop: '20px',
+        marginBottom: '12px',
         minHeight: '48px',
         userSelect: 'none' as const,
         WebkitTapHighlightColor: 'transparent',
@@ -462,6 +805,24 @@ const EventDetailsEdit: React.FC = () => {
       buttonHover: {
         transform: 'translateY(-2px)',
         boxShadow: '0 10px 30px rgba(0, 245, 255, 0.4)'
+      },
+
+      // ✅ Status butonları
+      statusButtons: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '12px',
+        marginTop: '24px'
+      },
+
+      deleteButton: {
+        background: 'linear-gradient(45deg, #ff6b6b, #ff3333)',
+        color: 'white'
+      },
+
+      passiveButton: {
+        background: 'linear-gradient(45deg, #ffa500, #ff8c00)',
+        color: 'white'
       },
 
       loading: {
@@ -694,6 +1055,10 @@ const EventDetailsEdit: React.FC = () => {
             grid-template-columns: 1fr !important;
             gap: 12px !important;
           }
+          .status-buttons {
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+          }
           .header {
             padding: 20px 16px !important;
           }
@@ -702,6 +1067,34 @@ const EventDetailsEdit: React.FC = () => {
           }
           .title {
             font-size: 1.75rem !important;
+          }
+          /* Participant responsive styles */
+          .participant-item {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+            padding: 16px !important;
+          }
+          .participant-info {
+            width: 100% !important;
+            margin-bottom: 8px !important;
+          }
+          .participant-actions {
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            width: auto !important;
+            gap: 8px !important;
+          }
+          .participant-name {
+            font-size: 14px !important;
+            white-space: normal !important;
+            line-height: 1.3 !important;
+          }
+          .participant-details {
+            white-space: normal !important;
+            line-height: 1.4 !important;
+            font-size: 12px !important;
           }
         }
 
@@ -764,6 +1157,20 @@ const EventDetailsEdit: React.FC = () => {
     );
   }
 
+  if (!isAdmin) {
+    return (
+      <div style={styles.container}>
+        {GlobalStyles}
+        {FloatingElements}
+        {LanguageSelector}
+        <div style={styles.editEventContainer}>
+          <div style={styles.loading}>{t('only_admin_can_edit')}</div>
+        </div>
+        <BottomNavigation />
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       {GlobalStyles}
@@ -795,7 +1202,7 @@ const EventDetailsEdit: React.FC = () => {
                 e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
               }}
             >
-              ← {t('back_to_home')}
+              ← {t('back_to_event')}
             </button>
             <h1 style={styles.title} className="title">
               {t('edit_event_button')}
@@ -803,6 +1210,7 @@ const EventDetailsEdit: React.FC = () => {
           </div>
 
           <div style={styles.content} className="content">
+            {/* Event Name */}
             <div style={styles.inputGroup}>
               <label style={styles.label}>{t('event_name_label')}</label>
               <input
@@ -818,6 +1226,22 @@ const EventDetailsEdit: React.FC = () => {
               />
             </div>
 
+            {/* ✅ Event Description */}
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>{t('event_description_label')}</label>
+              <textarea
+                style={styles.textarea}
+                placeholder={t('event_description_placeholder')}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onFocus={(e) =>
+                  Object.assign(e.target.style, styles.inputFocus)
+                }
+                onBlur={(e) => Object.assign(e.target.style, styles.textarea)}
+              />
+            </div>
+
+            {/* Event Category */}
             <div style={styles.inputGroup}>
               <label style={styles.label}>{t('event_category_label')}</label>
               <CustomDropdown
@@ -828,6 +1252,7 @@ const EventDetailsEdit: React.FC = () => {
               />
             </div>
 
+            {/* Location */}
             <div style={styles.formGrid} className="form-grid">
               <div style={styles.inputGroup}>
                 <label style={styles.label}>{t('country_label')}</label>
@@ -853,6 +1278,7 @@ const EventDetailsEdit: React.FC = () => {
               </div>
             </div>
 
+            {/* Date and Duration */}
             <div style={styles.formGrid} className="form-grid">
               <div style={styles.inputGroup}>
                 <label style={styles.label}>
@@ -893,6 +1319,95 @@ const EventDetailsEdit: React.FC = () => {
               </div>
             </div>
 
+            {/* ✅ Katılımcı Listesi */}
+            <div style={styles.participantsSection}>
+              <h3 style={styles.sectionTitle}>{t('event_participants')}</h3>
+
+              {participants.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    padding: '20px'
+                  }}
+                >
+                  {t('no_participants_yet')}
+                </div>
+              ) : (
+                <div style={styles.participantsList}>
+                  {participants.map((participant, index) => {
+                    const isCurrentUser =
+                      participant.user_id === currentUser?.id;
+                    const userName =
+                      `${participant.users.first_name} ${participant.users.last_name}`.trim();
+
+                    return (
+                      <div
+                        key={participant.id}
+                        style={{
+                          ...styles.participantItem,
+                          ...(index === participants.length - 1
+                            ? { borderBottom: 'none' }
+                            : {})
+                        }}
+                      >
+                        <div style={styles.participantInfo}>
+                          <div style={styles.participantName}>
+                            {userName || participant.users.email}
+                          </div>
+                          <div style={styles.participantDetails}>
+                            {participant.users.email}
+                          </div>
+                        </div>
+
+                        <div style={styles.participantActions}>
+                          {/* ✅ Sadece admin role'ü göster */}
+                          {participant.role === 'admin' && (
+                            <span style={styles.participantRole}>
+                              {t('role_admin')}
+                            </span>
+                          )}
+
+                          {!isCurrentUser && (
+                            <button
+                              style={{
+                                ...styles.removeButton,
+                                ...(removingParticipant === participant.id
+                                  ? styles.removeButtonDisabled
+                                  : {})
+                              }}
+                              onClick={() =>
+                                handleRemoveParticipant(
+                                  participant.id,
+                                  participant.user_id
+                                )
+                              }
+                              disabled={removingParticipant === participant.id}
+                              onMouseEnter={(e) => {
+                                if (removingParticipant !== participant.id) {
+                                  e.currentTarget.style.background =
+                                    'rgba(255, 107, 107, 0.3)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background =
+                                  'rgba(255, 107, 107, 0.2)';
+                              }}
+                            >
+                              {removingParticipant === participant.id
+                                ? t('removing')
+                                : t('remove')}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Save Button */}
             <button
               style={{
                 ...styles.button,
@@ -912,6 +1427,57 @@ const EventDetailsEdit: React.FC = () => {
             >
               {saving ? t('saving_event') : t('save_event_button')}
             </button>
+
+            {/* ✅ Status Butonları */}
+            <div style={styles.statusButtons} className="status-buttons">
+              <button
+                style={{
+                  ...styles.button,
+                  ...styles.passiveButton,
+                  ...(saving ? styles.buttonDisabled : {}),
+                  marginBottom: 0
+                }}
+                onClick={handleMakePassive}
+                disabled={saving}
+                onMouseEnter={(e) => {
+                  if (!saving) {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow =
+                      '0 10px 30px rgba(255, 165, 0, 0.4)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                {t('make_passive_button')}
+              </button>
+
+              <button
+                style={{
+                  ...styles.button,
+                  ...styles.deleteButton,
+                  ...(saving ? styles.buttonDisabled : {}),
+                  marginBottom: 0
+                }}
+                onClick={handleDeleteEvent}
+                disabled={saving}
+                onMouseEnter={(e) => {
+                  if (!saving) {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow =
+                      '0 10px 30px rgba(255, 107, 107, 0.4)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                {t('delete_event_button')}
+              </button>
+            </div>
           </div>
         </div>
       </div>

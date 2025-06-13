@@ -175,14 +175,10 @@ const EventDetails: React.FC = () => {
 
   const loadExpenses = async () => {
     try {
+      // Önce basit query ile deneyelim
       const { data, error } = await supabase
         .from('expenses')
-        .select(
-          `
-          *,
-          paid_by_user:users!expenses_paid_by_fkey(first_name, last_name)
-        `
-        )
+        .select('*')
         .eq('event_id', eventId)
         .order('expense_date', { ascending: false });
 
@@ -191,40 +187,40 @@ const EventDetails: React.FC = () => {
         return;
       }
 
-      const formattedExpenses = data.map((expense) => ({
-        ...expense,
-        paid_by_name: `${expense.paid_by_user?.first_name || ''} ${
-          expense.paid_by_user?.last_name || ''
-        }`.trim()
-      }));
+      // Eğer expenses varsa, kullanıcı bilgilerini ayrı ayrı yükleyelim
+      if (data && data.length > 0) {
+        const expensesWithUsers = await Promise.all(
+          data.map(async (expense) => {
+            // Her expense için kullanıcı bilgisini ayrı çek
+            const { data: userData } = await supabase
+              .from('users')
+              .select('first_name, last_name')
+              .eq('auth_user_id', expense.paid_by)
+              .single();
 
-      setExpenses(formattedExpenses);
+            return {
+              ...expense,
+              paid_by_name: userData
+                ? `${userData.first_name || ''} ${
+                    userData.last_name || ''
+                  }`.trim()
+                : 'Unknown User'
+            };
+          })
+        );
+
+        setExpenses(expensesWithUsers);
+      } else {
+        setExpenses([]);
+      }
     } catch (err) {
       console.error('Error loading expenses:', err);
+      setExpenses([]);
     }
   };
 
   const handleEditEvent = () => {
     navigate(`/events/${eventId}/edit`);
-  };
-
-  const handleShareEvent = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: event?.name,
-          text: `${event?.name} - ${event?.description}`,
-          url: window.location.href
-        });
-      } else {
-        // Fallback: copy to clipboard
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success(t('link_copied_to_clipboard'));
-      }
-    } catch (err) {
-      console.error('Error sharing:', err);
-      toast.error(t('share_failed'));
-    }
   };
 
   const handleAddExpense = () => {
@@ -239,6 +235,195 @@ const EventDetails: React.FC = () => {
   const formatDuration = (days: number | null) => {
     if (!days) return t('not_specified');
     return `${days} ${days === 1 ? t('day') : t('days')}`;
+  };
+
+  // ✅ Düzeltilmiş handleShareEvent fonksiyonu - Basitleştirilmiş ve güvenilir
+  const handleShareEvent = async () => {
+    try {
+      // Kullanıcı kimlik doğrulaması
+      const {
+        data: { user },
+        error: authError
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        console.error('Auth error:', authError);
+        toast.error(t('user_not_authenticated'));
+        return;
+      }
+
+      // Kullanıcının bu etkinlikte admin rolünde olup olmadığını kontrol et
+      const { data: participantData, error: participantError } = await supabase
+        .from('event_participants')
+        .select('role')
+        .eq('event_id', eventId)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (participantError) {
+        console.error('Participant check error:', participantError);
+        toast.error(t('failed_check_permissions'));
+        return;
+      }
+
+      if (!participantData || participantData.role !== 'admin') {
+        toast.error(t('only_admin_can_invite'));
+        return;
+      }
+
+      // Mevcut aktif davetiye var mı kontrol et
+      const { data: existingInvitations, error: existingError } = await supabase
+        .from('event_invitations')
+        .select('token, expires_at, created_by')
+        .eq('event_id', eventId)
+        .eq('status', 'pending')
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (existingError) {
+        console.error('Error checking existing invitations:', existingError);
+        // Hata olsa bile devam et, yeni davetiye oluştur
+      }
+
+      let inviteToken;
+      let isExistingToken = false;
+
+      // Mevcut geçerli davetiye varsa onu kullan
+      if (existingInvitations && existingInvitations.length > 0) {
+        const existingToken = existingInvitations[0].token;
+        if (
+          existingToken &&
+          typeof existingToken === 'string' &&
+          existingToken.trim() !== ''
+        ) {
+          inviteToken = existingToken.trim();
+          isExistingToken = true;
+          console.log('Using existing invitation token:', inviteToken);
+        }
+      }
+
+      // Eğer mevcut token yoksa veya geçersizse yeni oluştur
+      if (!inviteToken) {
+        console.log('Creating new invitation...');
+        const { data: newInvitation, error: inviteError } = await supabase
+          .from('event_invitations')
+          .insert([
+            {
+              event_id: eventId,
+              created_by: user.id,
+              status: 'pending'
+            }
+          ])
+          .select('token')
+          .single();
+
+        if (inviteError) {
+          console.error('Error creating invitation:', inviteError);
+          toast.error(t('failed_create_invite_link'));
+          return;
+        }
+
+        if (!newInvitation?.token) {
+          console.error('No token returned from invitation creation');
+          toast.error(t('failed_create_invite_link'));
+          return;
+        }
+
+        inviteToken = newInvitation.token.trim();
+        isExistingToken = false;
+        console.log('Created new invitation token:', inviteToken);
+      }
+
+      // Final token validation
+      if (!inviteToken || inviteToken.length < 10) {
+        console.error('Invalid or empty token:', inviteToken);
+        toast.error(t('invalid_invite_token'));
+        return;
+      }
+
+      // Davet linkini oluştur
+      const inviteUrl = `${window.location.origin}/invite/${inviteToken}`;
+      console.log('Generated invite URL:', inviteUrl);
+
+      // Önce clipboard'a kopyala, sonra share'i dene
+      const copySuccess = await copyToClipboard(inviteUrl, isExistingToken);
+
+      // Clipboard başarılıysa share'i de dene (opsiyonel)
+      if (copySuccess && navigator.share) {
+        try {
+          const shareData = {
+            title: `${t('join_event')}: ${event?.name}`,
+            text: `${event?.name} - ${event?.description}`,
+            url: inviteUrl
+          };
+
+          // canShare kontrolü varsa ve destekliyorsa
+          if (typeof navigator.canShare === 'function') {
+            if (navigator.canShare(shareData)) {
+              await navigator.share(shareData);
+              console.log('Share successful');
+            }
+          } else {
+            // canShare yoksa direkt share'i dene
+            await navigator.share(shareData);
+            console.log('Share successful (without canShare check)');
+          }
+        } catch (shareError) {
+          console.log('Share failed or cancelled:', shareError);
+          // Share başarısız oldu ama clipboard zaten başarılı, sorun yok
+        }
+      }
+    } catch (err) {
+      console.error('Error sharing event:', err);
+      toast.error(t('share_failed'));
+    }
+  };
+
+  // Clipboard'a kopyalama fonksiyonu - return success status
+  const copyToClipboard = async (
+    text: string,
+    isExisting: boolean
+  ): Promise<boolean> => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        toast.success(
+          isExisting
+            ? t('existing_invite_link_copied')
+            : t('invite_link_copied_to_clipboard')
+        );
+        return true;
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const success = document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        if (success) {
+          toast.success(
+            isExisting
+              ? t('existing_invite_link_copied')
+              : t('invite_link_copied_to_clipboard')
+          );
+          return true;
+        } else {
+          throw new Error('execCommand failed');
+        }
+      }
+    } catch (clipboardError) {
+      console.error('Clipboard error:', clipboardError);
+      toast.error(t('failed_copy_to_clipboard'));
+      return false;
+    }
   };
 
   // Optimize styles with useMemo to prevent re-calculation
@@ -359,7 +544,6 @@ const EventDetails: React.FC = () => {
         backgroundClip: 'text'
       },
 
-      // ✅ Kompakt info grid
       infoGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',

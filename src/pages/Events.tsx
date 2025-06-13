@@ -18,6 +18,13 @@ interface Event {
   created_at: string;
 }
 
+interface EventParticipant {
+  event_id: string;
+  role: string;
+  status: string;
+  events: Event;
+}
+
 const Events: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -26,6 +33,7 @@ const Events: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // network monitoring
   useEffect(() => {
@@ -49,32 +57,83 @@ const Events: React.FC = () => {
     };
   }, []);
 
-  // load events
+  // check user and load events
   useEffect(() => {
-    loadEvents();
+    checkUserAndLoadEvents();
   }, []);
 
-  const loadEvents = async () => {
+  const checkUserAndLoadEvents = async () => {
     try {
       setLoading(true);
 
+      // Kullanıcı kimlik kontrolü
+      const {
+        data: { user },
+        error: authError
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        console.error('Auth error:', authError);
+        toast.error(t('user_not_authenticated'));
+        navigate('/login');
+        return;
+      }
+
+      setCurrentUser(user);
+      await loadUserEvents(user.id);
+    } catch (err) {
+      console.error('Error checking user:', err);
+      toast.error(t('authentication_failed'));
+      navigate('/login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Sadece kullanıcının katıldığı etkinlikleri yükle
+  const loadUserEvents = async (userId: string) => {
+    try {
+      // event_participants tablosundan kullanıcının katıldığı etkinlikleri al
       const { data, error } = await supabase
-        .from('events')
-        .select('*')
+        .from('event_participants')
+        .select(
+          `
+          event_id,
+          role,
+          status,
+          events (
+            id,
+            name,
+            description,
+            category,
+            default_currency,
+            place_country,
+            place_city,
+            planned_start_date,
+            planned_duration_days,
+            created_at
+          )
+        `
+        )
+        .eq('user_id', userId)
+        .eq('status', 'active')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading events:', error);
+        console.error('Error loading user events:', error);
         toast.error(t('failed_load_events'));
         return;
       }
 
-      setEvents(data);
+      // EventParticipant array'ını Event array'ına dönüştür
+      const userEvents = data
+        .filter((participant: EventParticipant) => participant.events) // events null değilse
+        .map((participant: EventParticipant) => participant.events);
+
+      setEvents(userEvents);
     } catch (err) {
-      console.error('Error loading events:', err);
+      console.error('Error loading user events:', err);
       toast.error(t('failed_load_events'));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -164,6 +223,12 @@ const Events: React.FC = () => {
         backgroundClip: 'text'
       },
 
+      headerSubtitle: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: '14px',
+        marginTop: '8px'
+      },
+
       eventsContent: {
         background: 'rgba(26, 26, 46, 0.85)',
         backdropFilter: 'blur(20px)',
@@ -185,7 +250,8 @@ const Events: React.FC = () => {
         border: '1px solid rgba(255, 255, 255, 0.1)',
         padding: '16px',
         cursor: 'pointer',
-        transition: 'all 0.3s ease'
+        transition: 'all 0.3s ease',
+        position: 'relative' as const
       },
 
       eventTitle: {
@@ -206,6 +272,31 @@ const Events: React.FC = () => {
         color: 'rgba(255, 255, 255, 0.6)',
         fontSize: '16px',
         padding: '40px 20px'
+      },
+
+      emptyStateIcon: {
+        fontSize: '3rem',
+        marginBottom: '16px',
+        display: 'block'
+      },
+
+      emptyStateText: {
+        marginBottom: '16px',
+        lineHeight: '1.5'
+      },
+
+      createEventButton: {
+        background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+        color: 'white',
+        border: 'none',
+        borderRadius: '12px',
+        padding: '12px 24px',
+        fontSize: '14px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        userSelect: 'none' as const,
+        WebkitTapHighlightColor: 'transparent'
       },
 
       loading: {
@@ -491,8 +582,9 @@ const Events: React.FC = () => {
             ← {t('back_to_home')}
           </button>
           <h1 style={styles.headerTitle} className="header-title">
-            {t('events_title')}
+            {t('my_events_title')}
           </h1>
+          <p style={styles.headerSubtitle}>{t('events_you_participate_in')}</p>
         </div>
 
         {/* Events Content */}
@@ -500,7 +592,27 @@ const Events: React.FC = () => {
           {loading ? (
             <div style={styles.loading}>{t('loading_events')}</div>
           ) : events.length === 0 ? (
-            <div style={styles.emptyState}>{t('no_events_found')}</div>
+            <div style={styles.emptyState}>
+              <div style={styles.emptyStateIcon}>🎉</div>
+              <div style={styles.emptyStateText}>
+                {t('no_events_participated')}
+              </div>
+              <button
+                style={styles.createEventButton}
+                onClick={() => navigate('/create-event')}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow =
+                    '0 10px 30px rgba(0, 245, 255, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                {t('create_first_event')}
+              </button>
+            </div>
           ) : (
             <div style={styles.eventsList} className="events-list">
               {events.map((event) => (

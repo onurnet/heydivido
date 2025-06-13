@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { supabase } from '../supabaseClient';
+import { handlePendingInvitation } from '../utils/inviteHandler'; // ✅ YENİ IMPORT
 
 const Login: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -50,6 +51,36 @@ const Login: React.FC = () => {
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
+  };
+
+  // ✅ YENİ FONKSİYON - Login başarılı sonrası işlemler
+  const handleLoginSuccess = async () => {
+    try {
+      console.log('Login successful, checking for pending invitations...');
+
+      // Bekleyen davetiye kontrolü
+      const redirectUrl = await handlePendingInvitation(t);
+
+      if (redirectUrl) {
+        console.log('Redirecting to event:', redirectUrl);
+        // Davet varsa event sayfasına yönlendir
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 500);
+      } else {
+        console.log('No pending invitation, redirecting to home');
+        // Normal login flow'u
+        setTimeout(() => {
+          window.location.href = '/home';
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error in login success handler:', error);
+      // Hata durumunda da home'a yönlendir
+      setTimeout(() => {
+        window.location.href = '/home';
+      }, 500);
+    }
   };
 
   const handleLogin = async () => {
@@ -110,10 +141,8 @@ const Login: React.FC = () => {
         console.log('Login successful:', data.user.email);
         toast.success(t('login_successful'));
 
-        // Redirect to home after successful login
-        setTimeout(() => {
-          window.location.href = '/home';
-        }, 500);
+        // ✅ GÜNCEL - Invitation kontrolü ile yönlendirme
+        await handleLoginSuccess();
       }
     } catch (err) {
       console.error('Unexpected login error:', err);

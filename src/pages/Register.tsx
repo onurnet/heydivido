@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../supabaseClient';
 import toast from 'react-hot-toast';
+import { handlePendingInvitation } from '../utils/inviteHandler'; // ✅ YENİ IMPORT
 
 const Register: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -13,9 +14,80 @@ const Register: React.FC = () => {
   const [loading, setLoading] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = React.useState(false);
+
+  // ✅ YENİ STATE'LER - Invitation için
+  const [invitationInfo, setInvitationInfo] = React.useState<any>(null);
+  const [loadingInvite, setLoadingInvite] = React.useState(true);
+
   // Small delay function
   const sleep = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
+
+  // ✅ YENİ FONKSİYON - Davet bilgisini yükle (sadece görüntüleme için)
+  const loadInvitationPreview = async () => {
+    try {
+      const pendingToken = localStorage.getItem('pendingInviteToken');
+
+      if (!pendingToken) {
+        setLoadingInvite(false);
+        return;
+      }
+
+      console.log('Loading invitation preview for token:', pendingToken);
+
+      // Token ile etkinlik bilgisini al (authentication olmadan)
+      const { data: invitation, error } = await supabase
+        .from('event_invitations')
+        .select(
+          `
+          event:events(name, description, place_city, place_country)
+        `
+        )
+        .eq('token', pendingToken)
+        .eq('status', 'pending')
+        .gte('expires_at', new Date().toISOString())
+        .single();
+
+      if (!error && invitation) {
+        console.log('Invitation found:', invitation.event);
+        setInvitationInfo(invitation.event);
+      }
+    } catch (error) {
+      console.error('Error loading invitation preview:', error);
+    } finally {
+      setLoadingInvite(false);
+    }
+  };
+
+  // ✅ YENİ FONKSİYON - Register başarılı sonrası davet kontrolü
+  const handleRegisterSuccess = async () => {
+    try {
+      console.log('Register successful, checking for pending invitations...');
+
+      // Bekleyen davetiye kontrolü
+      const redirectUrl = await handlePendingInvitation(t);
+
+      if (redirectUrl) {
+        console.log('Redirecting to event:', redirectUrl);
+        // Davet varsa event sayfasına yönlendir
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 1000); // Register'da biraz daha uzun bekleme
+      } else {
+        console.log('No pending invitation, redirecting to login');
+        // Normal register flow'u - login sayfasına yönlendir
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error in register success handler:', error);
+      // Hata durumunda da login'e yönlendir
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 1000);
+    }
+  };
 
   // PWA: Network status monitoring
   React.useEffect(() => {
@@ -37,6 +109,25 @@ const Register: React.FC = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // ✅ YENİ useEffect - Component mount'ta davet bilgisini yükle
+  React.useEffect(() => {
+    loadInvitationPreview();
+  }, []);
+
+  // ✅ YENİ useEffect - Supabase auth state change listener (email confirmation sonrası)
+  React.useEffect(() => {
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        console.log('User signed in after email confirmation');
+        await handleRegisterSuccess();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const changeLanguage = (lng: string) => {
@@ -147,7 +238,7 @@ const Register: React.FC = () => {
         return;
       }
 
-      // 4️⃣ Success: Change language and redirect
+      // 4️⃣ Success: Change language and show success
       toast.success(t('registration_successful'));
 
       // Bekle, kullanıcı tostu görsün
@@ -156,7 +247,15 @@ const Register: React.FC = () => {
       // Change app language to user's preferred language
       i18n.changeLanguage(preferredLanguage);
 
-      window.location.href = '/login';
+      // ✅ GÜNCEL - Email confirmation bekleme mesajı ve invitation bilgisi
+      if (invitationInfo) {
+        toast.success(t('check_email_to_join_event'));
+      } else {
+        toast.success(t('registration_successful_check_email'));
+      }
+
+      // Eğer instant confirmation varsa (email confirmation kapalıysa):
+      // await handleRegisterSuccess();
     } catch (err) {
       console.error('Registration error:', err);
       setError(t('registration_failed'));
@@ -204,6 +303,49 @@ const Register: React.FC = () => {
       maxWidth: '400px',
       position: 'relative' as const,
       zIndex: 2
+    },
+
+    // ✅ YENİ STYLE - Invitation Preview Card
+    invitationPreview: {
+      background: 'rgba(0, 245, 255, 0.1)',
+      border: '1px solid rgba(0, 245, 255, 0.2)',
+      borderRadius: '16px',
+      padding: '20px',
+      marginBottom: '24px',
+      textAlign: 'center' as const,
+      animation: 'slideDown 0.5s ease-out'
+    },
+
+    inviteIcon: {
+      fontSize: '2rem',
+      marginBottom: '8px'
+    },
+
+    inviteTitle: {
+      color: '#00f5ff',
+      fontSize: '1.1rem',
+      marginBottom: '8px',
+      fontWeight: '600'
+    },
+
+    eventName: {
+      color: 'white',
+      fontSize: '1.2rem',
+      fontWeight: '700',
+      marginBottom: '4px'
+    },
+
+    eventLocation: {
+      color: 'rgba(255, 255, 255, 0.7)',
+      fontSize: '0.9rem',
+      marginBottom: '8px'
+    },
+
+    inviteNote: {
+      color: 'rgba(0, 245, 255, 0.8)',
+      fontSize: '0.8rem',
+      fontStyle: 'italic',
+      margin: '0'
     },
 
     header: {
@@ -634,6 +776,21 @@ const Register: React.FC = () => {
             style={styles.networkIndicator}
             title={isOnline ? 'Online' : 'Offline'}
           ></div>
+
+          {/* ✅ YENİ - Invitation Preview Card */}
+          {invitationInfo && !loadingInvite && (
+            <div style={styles.invitationPreview}>
+              <div style={styles.inviteIcon}>🎉</div>
+              <h3 style={styles.inviteTitle}>{t('joining_event')}</h3>
+              <p style={styles.eventName}>{invitationInfo.name}</p>
+              <p style={styles.eventLocation}>
+                {invitationInfo.place_city}, {invitationInfo.place_country}
+              </p>
+              <p style={styles.inviteNote}>
+                {t('after_registration_auto_join')}
+              </p>
+            </div>
+          )}
 
           <div style={styles.header}>
             <button

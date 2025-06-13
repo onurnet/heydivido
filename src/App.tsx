@@ -20,6 +20,7 @@ import EventDetails from './pages/EventDetails';
 import EventDetailsEdit from './pages/EventDetailsEdit';
 import Events from './pages/Events';
 import AddExpense from './pages/AddExpense'; // ✅ AddExpense import
+import InvitePage from './pages/InvitePage';
 
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './supabaseClient';
@@ -113,6 +114,7 @@ function App() {
           <Route path="/events" element={<Events />} />
           <Route path="/events/:eventId" element={<EventDetails />} />
           <Route path="/events/:eventId/edit" element={<EventDetailsEdit />} />
+          <Route path="/invite/:token" element={<InvitePage />} />
           <Route
             path="/events/:eventId/add-expense"
             element={<AddExpense />}
