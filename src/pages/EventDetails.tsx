@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from '../supabaseClient';
+import BottomNavigation from '../components/BottomNavigation/BottomNavigation';
 
 interface Event {
   id: string;
@@ -884,6 +885,7 @@ const EventDetails: React.FC = () => {
         <div style={styles.eventContainer}>
           <div style={styles.loading}>{t('loading_event_details')}</div>
         </div>
+        <BottomNavigation />
       </div>
     );
   }
@@ -897,6 +899,7 @@ const EventDetails: React.FC = () => {
         <div style={styles.eventContainer}>
           <div style={styles.loading}>{t('event_not_found')}</div>
         </div>
+        <BottomNavigation />
       </div>
     );
   }
@@ -1031,6 +1034,7 @@ const EventDetails: React.FC = () => {
           )}
         </div>
       </div>
+      <BottomNavigation />
     </div>
   );
 };

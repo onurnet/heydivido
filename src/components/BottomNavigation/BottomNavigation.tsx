@@ -8,6 +8,11 @@ const BottomNavigation: React.FC = () => {
   const location = useLocation();
   const [showAddMenu, setShowAddMenu] = useState(false);
 
+  const isInEventDetailPage =
+    location.pathname.startsWith('/events/') &&
+    (location.pathname.match(/^\/events\/[^/]+$/) ||
+      location.pathname.match(/^\/events\/[^/]+\/edit$/));
+
   const navStyle: React.CSSProperties = {
     position: 'fixed',
     bottom: 0,
@@ -30,45 +35,45 @@ const BottomNavigation: React.FC = () => {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '4px', // 6px'den 4px'e azaltıldı
+    gap: '4px',
     color: '#7f8c8d',
-    fontSize: '11px', // 13px'den 11px'e küçültüldü
-    fontWeight: 500, // 600'den 500'e düşürüldü
+    fontSize: '11px',
+    fontWeight: 500,
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     textDecoration: 'none',
-    padding: '6px 8px', // Padding azaltıldı
+    padding: '6px 8px',
     lineHeight: '1.1',
     textAlign: 'center' as const,
-    minWidth: '50px' // 60px'den 50px'e azaltıldı
+    minWidth: '50px'
   };
 
   const activeNavItemStyle: React.CSSProperties = {
     ...navItemStyle,
     color: '#4A90E2',
-    fontWeight: 600, // 700'den 600'e düşürüldü
+    fontWeight: 600,
     transform: 'scale(1.05)'
   };
 
   const iconStyle: React.CSSProperties = {
-    fontSize: '20px', // 22px'den 20px'e azaltıldı
+    fontSize: '20px',
     marginBottom: '1px'
   };
 
   const activeIconStyle: React.CSSProperties = {
     ...iconStyle,
-    fontSize: '22px' // 24px'den 22px'e azaltıldı
+    fontSize: '22px'
   };
 
   const addBtnStyle: React.CSSProperties = {
-    width: '60px', // 64px'den 60px'e azaltıldı
+    width: '60px',
     height: '60px',
     background:
       'linear-gradient(135deg, #00f5ff 0%, #4A90E2 50%, #ff006e 100%)',
     border: 'none',
     borderRadius: '50%',
     color: 'white',
-    fontSize: '28px', // 30px'den 28px'e azaltıldı
+    fontSize: '28px',
     fontWeight: '700',
     cursor: 'pointer',
     boxShadow: '0 8px 25px rgba(74, 144, 226, 0.4)',
@@ -85,7 +90,7 @@ const BottomNavigation: React.FC = () => {
 
   const addMenuStyle: React.CSSProperties = {
     position: 'absolute' as const,
-    bottom: '85px', // 90px'den 85px'e azaltıldı
+    bottom: '85px',
     left: '50%',
     transform: 'translateX(-50%)',
     background: 'rgba(26, 26, 46, 0.95)',
@@ -142,16 +147,13 @@ const BottomNavigation: React.FC = () => {
   };
 
   const handleAddClick = () => {
-    // Etkinlik sayfasında mıyız kontrol et (örnek: /events/123)
     if (
       location.pathname.startsWith('/events/') &&
       location.pathname !== '/events'
     ) {
-      // Direkt o etkinliğin harcama ekle sayfasına git
       const eventId = location.pathname.split('/')[2];
       navigate(`/events/${eventId}/add-expense`);
     } else {
-      // Seçim menüsünü aç/kapat
       setShowAddMenu(!showAddMenu);
     }
   };
@@ -193,19 +195,21 @@ const BottomNavigation: React.FC = () => {
           <span>{t('add_new_event')}</span>
         </div>
 
-        <div
-          style={menuItemStyle}
-          onClick={() => handleMenuItemClick('add-expense')}
-          onMouseEnter={(e) =>
-            Object.assign(e.currentTarget.style, menuItemHoverStyle)
-          }
-          onMouseLeave={(e) =>
-            Object.assign(e.currentTarget.style, menuItemStyle)
-          }
-        >
-          <span style={{ fontSize: '20px' }}>💰</span>
-          <span>{t('add_new_expense')}</span>
-        </div>
+        {isInEventDetailPage && (
+          <div
+            style={menuItemStyle}
+            onClick={() => handleMenuItemClick('add-expense')}
+            onMouseEnter={(e) =>
+              Object.assign(e.currentTarget.style, menuItemHoverStyle)
+            }
+            onMouseLeave={(e) =>
+              Object.assign(e.currentTarget.style, menuItemStyle)
+            }
+          >
+            <span style={{ fontSize: '20px' }}>💰</span>
+            <span>{t('add_new_expense')}</span>
+          </div>
+        )}
       </div>
 
       <nav style={navStyle}>
@@ -285,19 +289,16 @@ const BottomNavigation: React.FC = () => {
             }
           }
 
-          /* Smooth transitions */
           * {
             -webkit-tap-highlight-color: transparent;
           }
 
-          /* Better text rendering for small sizes */
           nav span {
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
           }
 
-          /* Responsive adjustments */
           @media (max-width: 350px) {
             nav div {
               padding: 4px 6px !important;

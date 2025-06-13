@@ -6,12 +6,12 @@ import { supabase } from '../supabaseClient';
 import GeoapifyAutocomplete from '../components/GeoapifyAutocomplete/GeoapifyAutocomplete';
 import BottomNavigation from '../components/BottomNavigation/BottomNavigation';
 
-// Dummy users (bu ileride event users olacak)
-const dummyUsers = [
-  { id: '1', name: 'Ali Veli' },
-  { id: '2', name: 'Ayşe Yılmaz' },
-  { id: '3', name: 'John Doe' }
-];
+// Types
+interface User {
+  id: string;
+  name: string;
+  email?: string;
+}
 
 interface DropdownOption {
   value: string;
@@ -191,6 +191,14 @@ const AddExpense: React.FC = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
 
+  // Loading states
+  const [loading, setLoading] = useState(true);
+  const [participantsLoading, setParticipantsLoading] = useState(true);
+
+  // Participants data
+  const [eventParticipants, setEventParticipants] = useState<User[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+
   const [isPlaceExpense, setIsPlaceExpense] = useState(true);
 
   const [selectedPOI, setSelectedPOI] = useState<{
@@ -204,15 +212,19 @@ const AddExpense: React.FC = () => {
     placeId?: string;
   } | null>(null);
 
+  const [manualPlaceName, setManualPlaceName] = useState('');
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
   const [displayAmount, setDisplayAmount] = useState('');
   const [currency, setCurrency] = useState('EUR');
 
-  const [paidByUserId, setPaidByUserId] = useState(dummyUsers[0].id);
-  const [participants, setParticipants] = useState<string[]>([
-    dummyUsers[0].id
-  ]);
+  const [paidByUserId, setPaidByUserId] = useState('');
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [participantShares, setParticipantShares] = useState<{
+    [userId: string]: number;
+  }>({});
 
   const [splitMethod, setSplitMethod] = useState<'equal' | 'manual'>('equal');
 
@@ -225,10 +237,323 @@ const AddExpense: React.FC = () => {
     label: curr
   }));
 
-  const userOptions: DropdownOption[] = dummyUsers.map((user) => ({
+  const userOptions: DropdownOption[] = eventParticipants.map((user) => ({
     value: user.id,
     label: user.name
   }));
+
+  // Fetch current user
+  const fetchCurrentUser = async () => {
+    try {
+      const {
+        data: { user },
+        error
+      } = await supabase.auth.getUser();
+      if (error) {
+        console.error('Error fetching current user:', error);
+        return;
+      }
+      if (user) {
+        setCurrentUserId(user.id);
+      }
+    } catch (err) {
+      console.error('Error in fetchCurrentUser:', err);
+    }
+  };
+
+  // Fetch event participants - ONLY for the specific event
+  const fetchEventParticipants = async () => {
+    if (!eventId) {
+      console.error('No eventId provided - cannot fetch participants');
+      toast.error(t('event_not_found'));
+      navigate('/events');
+      return;
+    }
+
+    setParticipantsLoading(true);
+    try {
+      console.log(`Fetching participants for event: ${eventId}`);
+
+      // First, get event participants
+      const { data: basicParticipants, error: basicError } = await supabase
+        .from('event_participants')
+        .select('*')
+        .eq('event_id', eventId);
+
+      console.log('Basic participants query result:', {
+        data: basicParticipants,
+        error: basicError
+      });
+
+      if (basicError) {
+        console.error('Error in basic participants query:', basicError);
+        toast.error(
+          t('failed_to_load_participants') + ': ' + basicError.message
+        );
+        return;
+      }
+
+      if (!basicParticipants || basicParticipants.length === 0) {
+        console.warn(`No participants found for event ${eventId}`);
+        setEventParticipants([]);
+        return;
+      }
+
+      // Get user IDs from participants
+      const userIds = basicParticipants.map((p) => p.user_id);
+      console.log('User IDs to fetch:', userIds);
+
+      // Fetch users with first_name and last_name (we know these columns exist)
+      // Try both possible user ID columns: 'id' and 'auth_user_id'
+      let usersData, usersError;
+
+      // First try with 'id' column
+      const idResult = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .in('id', userIds);
+
+      if (!idResult.error && idResult.data && idResult.data.length > 0) {
+        usersData = idResult.data;
+        usersError = null;
+        console.log('Users found with id column:', usersData);
+      } else {
+        // If 'id' doesn't work, try 'auth_user_id'
+        console.log('Trying with auth_user_id column...');
+        const authIdResult = await supabase
+          .from('users')
+          .select('auth_user_id, first_name, last_name, email')
+          .in('auth_user_id', userIds);
+
+        if (
+          !authIdResult.error &&
+          authIdResult.data &&
+          authIdResult.data.length > 0
+        ) {
+          // Map auth_user_id to id for consistency
+          usersData = authIdResult.data.map((user: any) => ({
+            id: user.auth_user_id,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            email: user.email
+          }));
+          usersError = null;
+          console.log('Users found with auth_user_id column:', usersData);
+        } else {
+          usersData = null;
+          usersError = authIdResult.error || idResult.error;
+          console.log('Both queries failed:', { idResult, authIdResult });
+        }
+      }
+
+      console.log('Users fetch result:', {
+        data: usersData,
+        error: usersError
+      });
+
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        toast.error(
+          t('failed_to_load_participants') + ': ' + usersError.message
+        );
+        return;
+      }
+
+      if (!usersData || usersData.length === 0) {
+        console.warn('No user data found for participant IDs');
+        // Fallback: create user objects with IDs as names
+        const participants: User[] = userIds.map((userId) => ({
+          id: userId,
+          name: `User ${userId.slice(0, 8)}...`,
+          email: ''
+        }));
+        setEventParticipants(participants);
+        return;
+      }
+
+      // Transform the data - combine first_name and last_name
+      const participants: User[] = usersData.map((user: any) => {
+        let displayName = '';
+
+        // Combine first_name and last_name
+        if (user.first_name && user.last_name) {
+          displayName = `${user.first_name} ${user.last_name}`;
+        } else if (user.first_name) {
+          displayName = user.first_name;
+        } else if (user.last_name) {
+          displayName = user.last_name;
+        } else if (user.email) {
+          // Create display name from email: username + first 3 chars of domain
+          const emailParts = user.email.split('@');
+          if (emailParts.length === 2) {
+            const username = emailParts[0];
+            const domain = emailParts[1];
+            const domainShort =
+              domain.length >= 3 ? domain.substring(0, 3) : domain;
+            displayName = `${username} (${domainShort})`;
+          } else {
+            // Fallback if email format is weird
+            displayName = user.email;
+          }
+        } else {
+          displayName = `User ${user.id.slice(0, 8)}...`;
+        }
+
+        return {
+          id: user.id,
+          name: displayName.trim(), // Remove any extra spaces
+          email: user.email || ''
+        };
+      });
+
+      console.log(
+        `Found ${participants.length} participants for event ${eventId}:`,
+        participants
+      );
+      setEventParticipants(participants);
+
+      // Set default values
+      if (participants.length > 0) {
+        // Find current user in participants, otherwise use first participant
+        const currentUserInEvent = participants.find(
+          (p) => p.id === currentUserId
+        );
+        const defaultUser = currentUserInEvent || participants[0];
+
+        console.log('Setting default paid by user:', defaultUser);
+        setPaidByUserId(defaultUser.id);
+        setParticipants([defaultUser.id]);
+      }
+    } catch (err) {
+      console.error('Error in fetchEventParticipants:', err);
+      toast.error(
+        t('failed_to_load_participants') + ': ' + (err as Error).message
+      );
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+
+  // Load initial data
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await fetchCurrentUser();
+      await fetchEventParticipants();
+      setLoading(false);
+    };
+
+    loadData();
+  }, [eventId]);
+
+  // Update defaults when current user or participants change
+  useEffect(() => {
+    if (currentUserId && eventParticipants.length > 0 && !paidByUserId) {
+      const currentUserInEvent = eventParticipants.find(
+        (p) => p.id === currentUserId
+      );
+      const defaultUser = currentUserInEvent || eventParticipants[0];
+
+      setPaidByUserId(defaultUser.id);
+      if (participants.length === 0) {
+        setParticipants([defaultUser.id]);
+      }
+    }
+  }, [currentUserId, eventParticipants, paidByUserId, participants.length]);
+
+  // Calculate participant shares based on split method
+  const calculateShares = (
+    totalAmount: number,
+    participantIds: string[],
+    method: 'equal' | 'manual',
+    currentShares: { [userId: string]: number } = {}
+  ) => {
+    if (!totalAmount || participantIds.length === 0) {
+      return {};
+    }
+
+    const newShares: { [userId: string]: number } = {};
+
+    if (method === 'equal') {
+      // Split equally among all participants
+      const sharePerPerson = totalAmount / participantIds.length;
+      participantIds.forEach((id) => {
+        newShares[id] = sharePerPerson;
+      });
+    } else {
+      // Manual split - preserve existing shares where possible
+      let remainingAmount = totalAmount;
+      let unallocatedParticipants: string[] = [];
+
+      // First, account for participants who already have manual shares
+      participantIds.forEach((id) => {
+        if (currentShares[id] && currentShares[id] > 0) {
+          newShares[id] = currentShares[id];
+          remainingAmount -= currentShares[id];
+        } else {
+          unallocatedParticipants.push(id);
+        }
+      });
+
+      // Split remaining amount equally among unallocated participants
+      if (unallocatedParticipants.length > 0 && remainingAmount > 0) {
+        const sharePerUnallocated =
+          remainingAmount / unallocatedParticipants.length;
+        unallocatedParticipants.forEach((id) => {
+          newShares[id] = sharePerUnallocated;
+        });
+      } else if (unallocatedParticipants.length > 0) {
+        // If no remaining amount, set to 0
+        unallocatedParticipants.forEach((id) => {
+          newShares[id] = 0;
+        });
+      }
+    }
+
+    return newShares;
+  };
+
+  // Update shares when amount or participants change
+  useEffect(() => {
+    if (amount && typeof amount === 'number' && participants.length > 0) {
+      const newShares = calculateShares(
+        amount,
+        participants,
+        splitMethod,
+        participantShares
+      );
+      setParticipantShares(newShares);
+    } else {
+      setParticipantShares({});
+    }
+  }, [amount, participants, splitMethod]);
+
+  // Handle manual share change
+  const handleShareChange = (userId: string, newShare: number) => {
+    if (splitMethod !== 'manual' || !amount || typeof amount !== 'number')
+      return;
+
+    const updatedShares = { ...participantShares };
+    updatedShares[userId] = newShare;
+
+    // Calculate remaining amount
+    const allocatedAmount = Object.values(updatedShares).reduce(
+      (sum, share) => sum + (share || 0),
+      0
+    );
+    const remainingAmount = amount - allocatedAmount;
+
+    // Distribute remaining amount among other participants
+    const otherParticipants = participants.filter((id) => id !== userId);
+    if (otherParticipants.length > 0 && remainingAmount !== 0) {
+      const sharePerOther = remainingAmount / otherParticipants.length;
+      otherParticipants.forEach((id) => {
+        updatedShares[id] = sharePerOther > 0 ? sharePerOther : 0;
+      });
+    }
+
+    setParticipantShares(updatedShares);
+  };
 
   // PWA: Network status monitoring
   useEffect(() => {
@@ -345,7 +670,9 @@ const AddExpense: React.FC = () => {
           currency,
           conversion_rate_to_event_currency: 1, // şimdilik dummy
           paid_by: paidByUserId,
-          place_name: selectedPOI?.name || null,
+          place_name: isPlaceExpense
+            ? manualPlaceName || selectedPOI?.name
+            : null,
           place_id: selectedPOI?.placeId || null,
           place_lat: selectedPOI?.lat || null,
           place_lon: selectedPOI?.lon || null,
@@ -371,7 +698,7 @@ const AddExpense: React.FC = () => {
     }
   };
 
-  // Optimize styles with useMemo to prevent re-calculation
+  // Optimize styles with useMemo to prevent re-calculation - ALWAYS at the end
   const styles = useMemo(
     () => ({
       container: {
@@ -456,7 +783,7 @@ const AddExpense: React.FC = () => {
 
       formGrid: {
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr', // ✅ Eşit boyutlar için 1fr 1fr
+        gridTemplateColumns: '1fr 1fr',
         gap: '16px',
         marginBottom: '16px'
       },
@@ -552,6 +879,102 @@ const AddExpense: React.FC = () => {
         padding: '8px',
         borderRadius: '8px',
         transition: 'all 0.3s ease'
+      },
+
+      participantRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        color: 'white',
+        fontSize: '14px',
+        padding: '8px',
+        borderRadius: '8px',
+        transition: 'all 0.3s ease',
+        justifyContent: 'space-between'
+      },
+
+      participantLeft: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        cursor: 'pointer'
+      },
+
+      participantRight: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        minWidth: '120px'
+      },
+
+      shareInput: {
+        width: '80px',
+        padding: '6px 8px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '6px',
+        fontSize: '14px',
+        color: 'white',
+        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+        transition: 'all 0.3s ease',
+        outline: 'none',
+        textAlign: 'right' as const,
+        boxSizing: 'border-box' as const,
+        WebkitAppearance: 'none' as const
+      },
+
+      shareInputDisabled: {
+        background: 'rgba(255, 255, 255, 0.02)',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        color: 'rgba(255, 255, 255, 0.4)',
+        cursor: 'not-allowed'
+      },
+
+      shareDisplay: {
+        minWidth: '80px',
+        padding: '6px 8px',
+        background: 'rgba(0, 245, 255, 0.1)',
+        border: '1px solid rgba(0, 245, 255, 0.2)',
+        borderRadius: '6px',
+        fontSize: '14px',
+        color: '#00f5ff',
+        textAlign: 'right' as const,
+        fontWeight: '600'
+      },
+
+      currencyLabel: {
+        fontSize: '12px',
+        color: 'rgba(255, 255, 255, 0.6)',
+        minWidth: '30px'
+      },
+
+      placeInputContainer: {
+        position: 'relative' as const
+      },
+
+      autocompleteToggle: {
+        marginTop: '8px',
+        padding: '6px 12px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        borderRadius: '6px',
+        color: '#00f5ff',
+        fontSize: '12px',
+        fontWeight: '500',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        userSelect: 'none' as const,
+        display: 'inline-block'
+      },
+
+      placePreview: {
+        marginTop: '8px',
+        padding: '8px 12px',
+        background: 'rgba(0, 245, 255, 0.1)',
+        border: '1px solid rgba(0, 245, 255, 0.2)',
+        borderRadius: '6px',
+        fontSize: '12px',
+        color: '#00f5ff'
       },
 
       checkbox: {
@@ -658,12 +1081,38 @@ const AddExpense: React.FC = () => {
         background: isOnline ? '#4CAF50' : '#f44336',
         boxShadow: `0 0 10px ${isOnline ? '#4CAF50' : '#f44336'}`,
         zIndex: 3
+      },
+
+      loadingContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px',
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: '16px'
+      },
+
+      loadingSpinner: {
+        width: '20px',
+        height: '20px',
+        border: '2px solid rgba(255, 255, 255, 0.3)',
+        borderTop: '2px solid #00f5ff',
+        borderRadius: '50%',
+        marginRight: '12px',
+        animation: 'spin 1s linear infinite'
+      },
+
+      emptyState: {
+        textAlign: 'center' as const,
+        padding: '40px 20px',
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: '14px'
       }
     }),
     [isOnline]
   );
 
-  // Render minimal floating elements
+  // Render minimal floating elements - ALWAYS at the end
   const FloatingElements = useMemo(
     () => (
       <>
@@ -694,7 +1143,7 @@ const AddExpense: React.FC = () => {
     [styles.floatingElement]
   );
 
-  // Language selector
+  // Language selector - ALWAYS at the end
   const LanguageSelector = useMemo(
     () => (
       <div style={styles.languageSelector}>
@@ -726,7 +1175,7 @@ const AddExpense: React.FC = () => {
     ]
   );
 
-  // Global styles
+  // Global styles - ALWAYS at the end
   const GlobalStyles = useMemo(
     () => (
       <style>
@@ -760,6 +1209,11 @@ const AddExpense: React.FC = () => {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
           33% { transform: translateY(-20px) rotate(2deg); }
           66% { transform: translateY(10px) rotate(-2deg); }
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
 
         @keyframes slideDown {
@@ -903,6 +1357,57 @@ const AddExpense: React.FC = () => {
     []
   );
 
+  // ✅ EARLY RETURNS AFTER ALL HOOKS - This prevents hooks order issues
+
+  // Show loading state
+  if (loading || participantsLoading) {
+    return (
+      <div style={styles.container}>
+        {GlobalStyles}
+        <div style={styles.addExpenseContainer}>
+          <div style={styles.formContainer}>
+            <div style={styles.loadingContainer}>
+              <div style={styles.loadingSpinner}></div>
+              {t('loading_participants')}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show empty state if no participants
+  if (eventParticipants.length === 0) {
+    return (
+      <div style={styles.container}>
+        {GlobalStyles}
+        <div style={styles.addExpenseContainer}>
+          <div style={styles.formContainer}>
+            <div style={styles.header}>
+              <button
+                style={styles.backButton}
+                onClick={() => navigate(`/events/${eventId}`)}
+              >
+                ← {t('back_to_home')}
+              </button>
+              <h1 style={styles.title}>{t('add_expense_button')}</h1>
+            </div>
+            <div style={styles.emptyState}>
+              <p>{t('no_participants_found')}</p>
+              <button
+                style={styles.button}
+                onClick={() => navigate(`/events/${eventId}`)}
+              >
+                {t('back_to_event')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ MAIN RENDER - Always happens after all hooks
   return (
     <div style={styles.container}>
       {GlobalStyles}
@@ -979,32 +1484,100 @@ const AddExpense: React.FC = () => {
             {isPlaceExpense && (
               <div style={styles.inputGroup}>
                 <label style={styles.label}>{t('select_place')}</label>
-                <GeoapifyAutocomplete
-                  type="poi"
-                  value={selectedPOI?.name || ''}
-                  onSelect={(placeId, placeName, extraData) => {
-                    setSelectedPOI({
-                      name: placeName,
-                      placeId: placeId,
-                      country: extraData.country,
-                      city: extraData.city,
-                      district: extraData.district,
-                      street: extraData.street,
-                      lat: extraData.lat,
-                      lon: extraData.lon
-                    });
-                  }}
-                />
+                <div style={styles.placeInputContainer}>
+                  {/* Manual Place Input */}
+                  <input
+                    style={styles.input}
+                    type="text"
+                    placeholder="e.g., Starbucks İstanbul Çekmeköy Merkez"
+                    value={manualPlaceName}
+                    onChange={(e) => setManualPlaceName(e.target.value)}
+                    onFocus={(e) =>
+                      Object.assign(e.target.style, styles.inputFocus)
+                    }
+                    onBlur={(e) => Object.assign(e.target.style, styles.input)}
+                  />
+
+                  {/* Toggle Autocomplete */}
+                  <button
+                    type="button"
+                    style={styles.autocompleteToggle}
+                    onClick={() => setShowAutocomplete(!showAutocomplete)}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background =
+                        'rgba(0, 245, 255, 0.1)';
+                      e.currentTarget.style.borderColor =
+                        'rgba(0, 245, 255, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background =
+                        'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.borderColor =
+                        'rgba(255, 255, 255, 0.2)';
+                    }}
+                  >
+                    {showAutocomplete
+                      ? '📍 Hide suggestions'
+                      : '🗺️ Search places'}
+                  </button>
+
+                  {/* Autocomplete (when toggled) */}
+                  {showAutocomplete && (
+                    <div style={{ marginTop: '12px' }}>
+                      <GeoapifyAutocomplete
+                        type="poi"
+                        value={selectedPOI?.name || ''}
+                        onSelect={(placeId, placeName, extraData) => {
+                          setSelectedPOI({
+                            name: placeName,
+                            placeId: placeId,
+                            country: extraData.country,
+                            city: extraData.city,
+                            district: extraData.district,
+                            street: extraData.street,
+                            lat: extraData.lat,
+                            lon: extraData.lon
+                          });
+
+                          // Auto-fill manual input with detailed place info
+                          const detailedName = [
+                            placeName,
+                            extraData.city,
+                            extraData.district,
+                            extraData.street
+                          ]
+                            .filter(Boolean)
+                            .join(' ');
+
+                          setManualPlaceName(detailedName);
+                          setShowAutocomplete(false);
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Selected POI Preview */}
+                  {selectedPOI && (
+                    <div style={styles.placePreview}>
+                      📍 {selectedPOI.name}
+                      {selectedPOI.city && ` • ${selectedPOI.city}`}
+                      {selectedPOI.district && ` • ${selectedPOI.district}`}
+                      {selectedPOI.country && ` • ${selectedPOI.country}`}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
             {/* Description */}
             <div style={styles.inputGroup}>
-              <label style={styles.label}>{t('event_description_label')}</label>
+              <label style={styles.label}>
+                {t('expense_description_label')}
+              </label>
               <input
                 style={styles.input}
                 type="text"
-                placeholder={t('event_description_label')}
+                placeholder={t('expense_description_label')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 onFocus={(e) =>
@@ -1020,7 +1593,7 @@ const AddExpense: React.FC = () => {
                 <label style={styles.label}>{t('amount_label')}</label>
                 <input
                   style={styles.input}
-                  type="text" // ✅ Text olarak değiştirildi formatting için
+                  type="text"
                   placeholder={i18n.language === 'tr' ? '0,00' : '0.00'}
                   value={displayAmount}
                   onChange={handleAmountChange}
@@ -1100,35 +1673,158 @@ const AddExpense: React.FC = () => {
             <div style={styles.inputGroup}>
               <label style={styles.label}>{t('participants_label')}</label>
               <div style={styles.checkboxGroup}>
-                {dummyUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    style={styles.checkboxItem}
-                    onClick={() => {
-                      if (participants.includes(user.id)) {
-                        setParticipants(
-                          participants.filter((id) => id !== user.id)
-                        );
-                      } else {
-                        setParticipants([...participants, user.id]);
-                      }
-                    }}
-                  >
+                {eventParticipants.map((user) => (
+                  <div key={user.id} style={styles.participantRow}>
                     <div
-                      style={{
-                        ...styles.checkbox,
-                        ...(participants.includes(user.id)
-                          ? styles.checkboxChecked
-                          : {})
+                      style={styles.participantLeft}
+                      onClick={() => {
+                        if (participants.includes(user.id)) {
+                          const newParticipants = participants.filter(
+                            (id) => id !== user.id
+                          );
+                          setParticipants(newParticipants);
+
+                          // Remove from shares
+                          const newShares = { ...participantShares };
+                          delete newShares[user.id];
+                          setParticipantShares(newShares);
+                        } else {
+                          setParticipants([...participants, user.id]);
+                        }
                       }}
-                      className={
-                        participants.includes(user.id) ? 'checkbox-checked' : ''
-                      }
-                    ></div>
-                    <span>{user.name}</span>
+                    >
+                      <div
+                        style={{
+                          ...styles.checkbox,
+                          ...(participants.includes(user.id)
+                            ? styles.checkboxChecked
+                            : {})
+                        }}
+                        className={
+                          participants.includes(user.id)
+                            ? 'checkbox-checked'
+                            : ''
+                        }
+                      ></div>
+                      <span>{user.name}</span>
+                    </div>
+
+                    {/* Show share amount if participant is selected - ALWAYS VISIBLE */}
+                    {participants.includes(user.id) && (
+                      <div style={styles.participantRight}>
+                        {splitMethod === 'equal' ? (
+                          // Equal split - show calculated amount (non-editable)
+                          <div style={styles.shareDisplay}>
+                            {amount && typeof amount === 'number'
+                              ? (participantShares[user.id] || 0).toFixed(2)
+                              : '0.00'}
+                          </div>
+                        ) : (
+                          // Manual split - show editable input
+                          <input
+                            style={{
+                              ...styles.shareInput,
+                              ...(!amount || typeof amount !== 'number'
+                                ? styles.shareInputDisabled
+                                : {})
+                            }}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={amount || 999999}
+                            value={
+                              amount && typeof amount === 'number'
+                                ? (participantShares[user.id] || 0).toFixed(2)
+                                : '0.00'
+                            }
+                            onChange={(e) => {
+                              if (amount && typeof amount === 'number') {
+                                const newValue =
+                                  parseFloat(e.target.value) || 0;
+                                handleShareChange(user.id, newValue);
+                              }
+                            }}
+                            disabled={!amount || typeof amount !== 'number'}
+                            onFocus={(e) => {
+                              if (amount && typeof amount === 'number') {
+                                e.target.style.borderColor = '#00f5ff';
+                                e.target.style.boxShadow =
+                                  '0 0 10px rgba(0, 245, 255, 0.2)';
+                                e.target.style.background =
+                                  'rgba(255, 255, 255, 0.08)';
+                              }
+                            }}
+                            onBlur={(e) => {
+                              e.target.style.borderColor =
+                                'rgba(255, 255, 255, 0.1)';
+                              e.target.style.boxShadow = 'none';
+                              e.target.style.background =
+                                'rgba(255, 255, 255, 0.05)';
+                            }}
+                          />
+                        )}
+                        <span style={styles.currencyLabel}>{currency}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
+
+              {/* Show total validation for manual split */}
+              {splitMethod === 'manual' &&
+                amount &&
+                typeof amount === 'number' &&
+                participants.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      background:
+                        Math.abs(
+                          Object.values(participantShares).reduce(
+                            (sum, share) => sum + (share || 0),
+                            0
+                          ) - amount
+                        ) < 0.01
+                          ? 'rgba(76, 175, 80, 0.1)'
+                          : 'rgba(255, 193, 7, 0.1)',
+                      border:
+                        Math.abs(
+                          Object.values(participantShares).reduce(
+                            (sum, share) => sum + (share || 0),
+                            0
+                          ) - amount
+                        ) < 0.01
+                          ? '1px solid rgba(76, 175, 80, 0.3)'
+                          : '1px solid rgba(255, 193, 7, 0.3)',
+                      color:
+                        Math.abs(
+                          Object.values(participantShares).reduce(
+                            (sum, share) => sum + (share || 0),
+                            0
+                          ) - amount
+                        ) < 0.01
+                          ? '#4CAF50'
+                          : '#FFC107'
+                    }}
+                  >
+                    Total:{' '}
+                    {Object.values(participantShares)
+                      .reduce((sum, share) => sum + (share || 0), 0)
+                      .toFixed(2)}{' '}
+                    {currency}
+                    {Math.abs(
+                      Object.values(participantShares).reduce(
+                        (sum, share) => sum + (share || 0),
+                        0
+                      ) - amount
+                    ) < 0.01
+                      ? ' ✓'
+                      : ` (Expected: ${amount.toFixed(2)} ${currency})`}
+                  </div>
+                )}
             </div>
 
             <button
