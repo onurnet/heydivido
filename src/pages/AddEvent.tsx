@@ -250,7 +250,7 @@ const AddEvent: React.FC = () => {
     i18n.changeLanguage(lng);
   };
 
-  // ✅ Güncellenmiş handleSave fonksiyonu - Otomatik yönlendirme ile
+  // ✅ Güncellenmiş handleSave fonksiyonu - Event participants ile birlikte
   const handleSave = async () => {
     if (
       !name ||
@@ -276,13 +276,13 @@ const AddEvent: React.FC = () => {
         return;
       }
 
-      // ✅ Insert işlemi ile birlikte yeni event'in id'sini alıyoruz
-      const { data, error } = await supabase
+      // ✅ 1. Önce etkinliği oluştur
+      const { data: eventData, error: eventError } = await supabase
         .from('events')
         .insert([
           {
             name,
-            category: eventCategory, // ✅ Category alanı da kaydediliyor
+            category: eventCategory,
             description,
             default_currency: defaultCurrency,
             place_country: country,
@@ -294,22 +294,42 @@ const AddEvent: React.FC = () => {
           }
         ])
         .select('id')
-        .single(); // ✅ Yeni oluşturulan event'in id'sini tek bir kayıt olarak alıyoruz
+        .single();
 
-      if (error) {
-        console.error('Error inserting event:', error);
+      if (eventError) {
+        console.error('Error inserting event:', eventError);
         toast.error(t('failed_create_event'));
         return;
       }
 
-      // ✅ Başarılı mesajı göster
+      // ✅ 2. Etkinlik oluşturucusunu katılımcı olarak ekle
+      const { error: participantError } = await supabase
+        .from('event_participants')
+        .insert([
+          {
+            event_id: eventData.id,
+            user_id: user.id,
+            role: 'admin', // Etkinlik oluşturucu admin rolünde
+            status: 'active',
+            joined_at: new Date().toISOString()
+          }
+        ]);
+
+      if (participantError) {
+        console.error('Error adding participant:', participantError);
+
+        // ✅ Hata durumunda oluşturulan etkinliği sil (rollback)
+        await supabase.from('events').delete().eq('id', eventData.id);
+
+        toast.error(t('failed_create_event'));
+        return;
+      }
+
+      // ✅ Her şey başarılı - başarılı mesajı göster
       toast.success(t('event_created_successfully'));
 
       // ✅ Yeni oluşturulan event'in detay sayfasına yönlendir
-      navigate(`/events/${data.id}`);
-
-      // Form reset işlemi artık gerekli değil çünkü kullanıcı başka sayfaya gidiyor
-      // Ama isterseniz navigation'dan önce de yapabilirsiniz
+      navigate(`/events/${eventData.id}`);
     } catch (err) {
       console.error('Unexpected error:', err);
       toast.error(t('failed_create_event'));
