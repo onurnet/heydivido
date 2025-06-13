@@ -1192,7 +1192,9 @@ const Profile: React.FC = () => {
               </div>
 
               <div style={styles.inputGroup}>
-                <label style={styles.label}>IBAN Currency</label>
+                <label style={styles.label}>
+                  {t('iban_currency_placeholder')}
+                </label>
                 <CustomDropdown
                   options={currencyOptions}
                   value={profile.iban_currency || ''}

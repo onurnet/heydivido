@@ -8,7 +8,8 @@ import BottomNavigation from '../components/BottomNavigation/BottomNavigation';
 
 // Types
 interface User {
-  id: string;
+  id: string; // auth_user_id → UI için kullanılıyor
+  real_id: string; // users.id → FK için kullanıyoruz (expenses.paid_by)
   name: string;
   email?: string;
 }
@@ -234,6 +235,13 @@ const AddExpense: React.FC = () => {
 
   const [saving, setSaving] = useState(false);
 
+  // NEW: Currency conversion states
+  const [eventDefaultCurrency, setEventDefaultCurrency] = useState<string>('');
+  const [showCurrencyConfirmation, setShowCurrencyConfirmation] =
+    useState(false);
+  const [conversionRate, setConversionRate] = useState<number>(1);
+  const [pendingExpenseData, setPendingExpenseData] = useState<any>(null);
+
   const currencies = ['EUR', 'USD', 'GBP', 'TRY'];
 
   const currencyOptions: DropdownOption[] = currencies.map((curr) => ({
@@ -242,9 +250,61 @@ const AddExpense: React.FC = () => {
   }));
 
   const userOptions: DropdownOption[] = eventParticipants.map((user) => ({
-    value: user.id,
+    value: user.real_id, // FK için doğru olan bu!
     label: user.name
   }));
+
+  // NEW: Fetch event details to get default currency
+  const fetchEventDetails = async () => {
+    if (!eventId) return;
+
+    try {
+      const { data: eventData, error } = await supabase
+        .from('events')
+        .select('default_currency')
+        .eq('id', eventId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching event details:', error);
+        toast.error(t('failed_to_load_event'));
+        return;
+      }
+
+      if (eventData) {
+        setEventDefaultCurrency(eventData.default_currency || 'EUR');
+      }
+    } catch (err) {
+      console.error('Error in fetchEventDetails:', err);
+    }
+  };
+
+  // NEW: Fetch conversion rate from API
+  const fetchConversionRate = async (
+    fromCurrency: string,
+    toCurrency: string
+  ): Promise<number | null> => {
+    try {
+      // Try with frankfurter.app (very reliable)
+      const response = await fetch(
+        `https://api.frankfurter.app/latest?amount=1&from=${fromCurrency}&to=${toCurrency}`
+      );
+      const data = await response.json();
+
+      if (data && data.rates && data.rates[toCurrency]) {
+        console.log(
+          `Fetched rate via frankfurter: 1 ${fromCurrency} = ${data.rates[toCurrency]} ${toCurrency}`
+        );
+        return data.rates[toCurrency];
+      }
+
+      console.error('Frankfurter API failed');
+      return null;
+    } catch (error) {
+      console.error('Error fetching conversion rate:', error);
+      return null;
+    }
+  };
 
   // Fetch current user
   const fetchCurrentUser = async () => {
@@ -314,11 +374,18 @@ const AddExpense: React.FC = () => {
       // First try with 'id' column
       const idResult = await supabase
         .from('users')
-        .select('id, first_name, last_name, email')
+        .select('id, auth_user_id, first_name, last_name, email')
         .in('id', userIds);
 
       if (!idResult.error && idResult.data && idResult.data.length > 0) {
-        usersData = idResult.data;
+        // id ile bulundu
+        usersData = idResult.data.map((user: any) => ({
+          id: user.auth_user_id, // UI için auth_user_id kullanabilirsin
+          real_id: user.id, // FK için users.id kullanacağız (paid_by için bu lazım!)
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email
+        }));
         usersError = null;
         console.log('Users found with id column:', usersData);
       } else {
@@ -326,7 +393,7 @@ const AddExpense: React.FC = () => {
         console.log('Trying with auth_user_id column...');
         const authIdResult = await supabase
           .from('users')
-          .select('auth_user_id, first_name, last_name, email')
+          .select('id, auth_user_id, first_name, last_name, email')
           .in('auth_user_id', userIds);
 
         if (
@@ -334,9 +401,9 @@ const AddExpense: React.FC = () => {
           authIdResult.data &&
           authIdResult.data.length > 0
         ) {
-          // Map auth_user_id to id for consistency
           usersData = authIdResult.data.map((user: any) => ({
-            id: user.auth_user_id,
+            id: user.auth_user_id, // UI için auth_user_id
+            real_id: user.id, // FK için users.id kullanacağız (paid_by için)
             first_name: user.first_name,
             last_name: user.last_name,
             email: user.email
@@ -366,20 +433,31 @@ const AddExpense: React.FC = () => {
       if (!usersData || usersData.length === 0) {
         console.warn('No user data found for participant IDs');
         // Fallback: create user objects with IDs as names
-        const participants: User[] = userIds.map((userId) => ({
+        const fallbackParticipants: User[] = userIds.map((userId) => ({
           id: userId,
+          real_id: userId, // Fallback: use same ID for both
           name: `User ${userId.slice(0, 8)}...`,
           email: ''
         }));
-        setEventParticipants(participants);
+
+        // Set state
+        setEventParticipants(fallbackParticipants);
+
+        // IMMEDIATELY set default values using local array (not state)
+        if (fallbackParticipants.length > 0) {
+          const defaultUser = fallbackParticipants[0];
+          console.log('Setting fallback default paid by user:', defaultUser);
+          setPaidByUserId(defaultUser.real_id);
+          setParticipants([defaultUser.id]);
+        }
+
         return;
       }
 
       // Transform the data - combine first_name and last_name
-      const participants: User[] = usersData.map((user: any) => {
+      const finalParticipants: User[] = usersData.map((user: any) => {
         let displayName = '';
 
-        // Combine first_name and last_name
         if (user.first_name && user.last_name) {
           displayName = `${user.first_name} ${user.last_name}`;
         } else if (user.first_name) {
@@ -387,7 +465,6 @@ const AddExpense: React.FC = () => {
         } else if (user.last_name) {
           displayName = user.last_name;
         } else if (user.email) {
-          // Create display name from email: username + first 3 chars of domain
           const emailParts = user.email.split('@');
           if (emailParts.length === 2) {
             const username = emailParts[0];
@@ -396,7 +473,6 @@ const AddExpense: React.FC = () => {
               domain.length >= 3 ? domain.substring(0, 3) : domain;
             displayName = `${username} (${domainShort})`;
           } else {
-            // Fallback if email format is weird
             displayName = user.email;
           }
         } else {
@@ -404,29 +480,53 @@ const AddExpense: React.FC = () => {
         }
 
         return {
-          id: user.id,
-          name: displayName.trim(), // Remove any extra spaces
+          id: user.id, // auth_user_id for UI
+          real_id: user.real_id, // users.id for FK
+          name: displayName.trim(),
           email: user.email || ''
         };
       });
 
       console.log(
-        `Found ${participants.length} participants for event ${eventId}:`,
-        participants
+        `Found ${finalParticipants.length} participants for event ${eventId}:`,
+        finalParticipants
       );
-      setEventParticipants(participants);
 
-      // Set default values
-      if (participants.length > 0) {
-        // Find current user in participants, otherwise use first participant
-        const currentUserInEvent = participants.find(
+      // Set participants state
+      setEventParticipants(finalParticipants);
+
+      // IMMEDIATELY set default values using local finalParticipants array (not state)
+      // This prevents timing issues with React state updates
+      if (finalParticipants.length > 0) {
+        // Try to find current user in participants, otherwise use first participant
+        const currentUserInEvent = finalParticipants.find(
           (p) => p.id === currentUserId
         );
-        const defaultUser = currentUserInEvent || participants[0];
+        const defaultUser = currentUserInEvent || finalParticipants[0];
 
-        console.log('Setting default paid by user:', defaultUser);
-        setPaidByUserId(defaultUser.id);
+        console.log('Setting default paid by user immediately:', {
+          currentUserId,
+          currentUserInEvent,
+          defaultUser,
+          finalParticipants: finalParticipants.map((p) => ({
+            id: p.id,
+            real_id: p.real_id,
+            name: p.name
+          }))
+        });
+
+        // Set paid by user using real_id (for FK)
+        setPaidByUserId(defaultUser.real_id);
+
+        // Set participants array using auth_user_id (for UI)
         setParticipants([defaultUser.id]);
+
+        console.log('✅ Default values set:', {
+          setPaidByUserId: defaultUser.real_id,
+          setParticipants: [defaultUser.id]
+        });
+      } else {
+        console.warn('No participants found to set defaults');
       }
     } catch (err) {
       console.error('Error in fetchEventParticipants:', err);
@@ -443,6 +543,7 @@ const AddExpense: React.FC = () => {
     const loadData = async () => {
       setLoading(true);
       await fetchCurrentUser();
+      await fetchEventDetails(); // NEW: Fetch event details
       await fetchEventParticipants();
       setLoading(false);
     };
@@ -458,7 +559,7 @@ const AddExpense: React.FC = () => {
       );
       const defaultUser = currentUserInEvent || eventParticipants[0];
 
-      setPaidByUserId(defaultUser.id);
+      setPaidByUserId(defaultUser.real_id);
       if (participants.length === 0) {
         setParticipants([defaultUser.id]);
       }
@@ -659,44 +760,201 @@ const AddExpense: React.FC = () => {
     }
   };
 
+  // MODIFIED: Updated handleSave with currency conversion logic
   const handleSave = async () => {
     if (!eventId) {
       toast.error(t('event_not_found'));
       return;
     }
 
-    if (
-      !description ||
-      !amount ||
-      amount === '' ||
-      !currency ||
-      !paidByUserId ||
-      participants.length === 0
-    ) {
-      toast.error(t('fill_required_fields'));
+    // DEBUG: Log current state for debugging
+    console.log('=== VALIDATION DEBUG ===');
+    console.log('isPlaceExpense:', isPlaceExpense);
+    console.log('description:', description);
+    console.log('amount:', amount);
+    console.log('currency:', currency);
+    console.log('paidByUserId:', paidByUserId);
+    console.log('participants:', participants);
+    console.log('manualPlaceName:', manualPlaceName);
+    console.log('selectedPOI:', selectedPOI);
+
+    // VALIDATION LOGIC WITH DEBUGGING
+
+    // 1. Amount validation
+    const isAmountValid =
+      amount !== '' &&
+      amount !== null &&
+      amount !== undefined &&
+      typeof amount === 'number' &&
+      amount > 0;
+    if (!isAmountValid) {
+      console.log('❌ Amount validation failed:', amount);
+      toast.error(t('fill_required_fields') + ' (Amount)');
       return;
     }
+
+    // 2. Currency validation
+    if (!currency || currency.trim() === '') {
+      console.log('❌ Currency validation failed:', currency);
+      toast.error(t('fill_required_fields') + ' (Currency)');
+      return;
+    }
+
+    // 3. Paid by validation
+    if (!paidByUserId || paidByUserId.trim() === '') {
+      console.log('❌ PaidByUserId validation failed:', paidByUserId);
+      toast.error(t('fill_required_fields') + ' (Paid By)');
+      return;
+    }
+
+    // 4. Participants validation
+    if (!participants || participants.length === 0) {
+      console.log('❌ Participants validation failed:', participants);
+      toast.error(t('fill_required_fields') + ' (Participants)');
+      return;
+    }
+
+    // 5. Description validation (conditional)
+    // - General Expense: description is REQUIRED
+    // - Place Expense: description is OPTIONAL
+    const isDescriptionValid = isPlaceExpense
+      ? true // Place expense: description is optional
+      : description && description.trim().length > 0; // General expense: description is required
+
+    if (!isDescriptionValid) {
+      console.log(
+        '❌ Description validation failed for General Expense:',
+        description
+      );
+      toast.error(
+        t('fill_required_fields') +
+          ' (Description required for General Expense)'
+      );
+      return;
+    }
+
+    // 6. Place validation (conditional)
+    // - Place Expense: place info is REQUIRED (either manual name or selected POI)
+    // - General Expense: place info is IGNORED
+    let isPlaceValid = true;
+    if (isPlaceExpense) {
+      const hasManualPlace =
+        manualPlaceName && manualPlaceName.trim().length > 0;
+      const hasSelectedPOI =
+        selectedPOI && selectedPOI.name && selectedPOI.name.trim().length > 0;
+      isPlaceValid = hasManualPlace || hasSelectedPOI;
+
+      if (!isPlaceValid) {
+        console.log('❌ Place validation failed for Place Expense:');
+        console.log('  manualPlaceName:', manualPlaceName);
+        console.log('  selectedPOI:', selectedPOI);
+        toast.error(
+          t('fill_required_fields') + ' (Place required for Place Expense)'
+        );
+        return;
+      }
+    }
+
+    console.log('✅ All validations passed!');
 
     setSaving(true);
 
     try {
+      // Prepare expense data
+      const expenseData = {
+        event_id: eventId,
+        description: description?.trim() || '', // Always include description, even if empty
+        amount,
+        currency,
+        paid_by: paidByUserId,
+        // Place fields: only include if it's a place expense
+        place_name: isPlaceExpense
+          ? manualPlaceName?.trim() || selectedPOI?.name || null
+          : null,
+        place_id: isPlaceExpense ? selectedPOI?.placeId || null : null,
+        place_lat: isPlaceExpense ? selectedPOI?.lat || null : null,
+        place_lon: isPlaceExpense ? selectedPOI?.lon || null : null,
+        place_country: isPlaceExpense ? selectedPOI?.country || null : null,
+        place_city: isPlaceExpense ? selectedPOI?.city || null : null,
+        category: isPlaceExpense ? 'place' : 'general'
+      };
+
+      console.log('Final expense data:', expenseData);
+      console.log(
+        'Event currency:',
+        eventDefaultCurrency,
+        'Expense currency:',
+        currency
+      );
+
+      // Currency conversion logic
+      if (currency === eventDefaultCurrency) {
+        // Same currency → direct save with conversion_rate = 1
+        const { error } = await supabase.from('expenses').insert([
+          {
+            ...expenseData,
+            conversion_rate_to_event_currency: 1
+          }
+        ]);
+
+        if (error) {
+          console.error('Error inserting expense:', error);
+          toast.error(t('failed_create_expense'));
+          setSaving(false);
+          return;
+        }
+
+        toast.success(t('expense_created_successfully'));
+        navigate(`/events/${eventId}`);
+      } else {
+        // Different currency → fetch conversion rate and show confirmation
+        const rate = await fetchConversionRate(currency, eventDefaultCurrency);
+
+        if (rate === null || isNaN(rate) || rate <= 0) {
+          console.error('Invalid conversion rate:', rate);
+          toast.error(
+            'Failed to fetch valid conversion rate. Please try again.'
+          );
+          setSaving(false);
+          return;
+        }
+
+        console.log('Fetched conversion rate:', rate);
+
+        // Store data for confirmation dialog
+        setConversionRate(rate);
+        setPendingExpenseData(expenseData);
+        setShowCurrencyConfirmation(true);
+        // Note: setSaving(false) will be called in handleCurrencyConfirmation
+      }
+    } catch (err) {
+      console.error('Unexpected error in handleSave:', err);
+      toast.error(t('failed_create_expense'));
+      setSaving(false);
+    }
+  };
+
+  const handleCurrencyConfirmation = async (confirmed: boolean) => {
+    setShowCurrencyConfirmation(false);
+
+    if (!confirmed || !pendingExpenseData) {
+      console.log('Currency confirmation canceled or no pending data.');
+      setPendingExpenseData(null);
+      setSaving(false);
+      return;
+    }
+
+    // Safe conversion rate
+    const safeRate =
+      !isNaN(conversionRate) && conversionRate > 0 ? conversionRate : 1;
+
+    console.log('Final insert with conversion rate:', safeRate);
+
+    try {
       const { error } = await supabase.from('expenses').insert([
         {
-          event_id: eventId,
-          description,
-          amount,
-          currency,
-          conversion_rate_to_event_currency: 1, // şimdilik dummy
-          paid_by: paidByUserId,
-          place_name: isPlaceExpense
-            ? manualPlaceName || selectedPOI?.name
-            : null,
-          place_id: selectedPOI?.placeId || null,
-          place_lat: selectedPOI?.lat || null,
-          place_lon: selectedPOI?.lon || null,
-          place_country: selectedPOI?.country || null,
-          place_city: selectedPOI?.city || null,
-          category: isPlaceExpense ? 'place' : 'general'
+          ...pendingExpenseData,
+          conversion_rate_to_event_currency: safeRate
         }
       ]);
 
@@ -709,10 +967,11 @@ const AddExpense: React.FC = () => {
       toast.success(t('expense_created_successfully'));
       navigate(`/events/${eventId}`);
     } catch (err) {
-      console.error('Unexpected error:', err);
+      console.error('Unexpected error during confirmed insert:', err);
       toast.error(t('failed_create_expense'));
     } finally {
       setSaving(false);
+      setPendingExpenseData(null);
     }
   };
 
@@ -926,11 +1185,11 @@ const AddExpense: React.FC = () => {
       },
 
       shareInput: {
-        width: '90px', // Slightly wider for better usability
-        padding: '10px 12px', // Medium padding for modern feel
+        width: '90px',
+        padding: '10px 12px',
         background: 'rgba(255, 255, 255, 0.05)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderRadius: '12px', // Larger border-radius for modern look
+        borderRadius: '12px',
         fontSize: '14px',
         color: 'white',
         fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
@@ -939,8 +1198,7 @@ const AddExpense: React.FC = () => {
         textAlign: 'right' as const,
         boxSizing: 'border-box' as const,
         WebkitAppearance: 'none' as const,
-        MozAppearance: 'textfield' as const, // Hide Firefox spinner
-        // Enhanced focus styling
+        MozAppearance: 'textfield' as const,
         ':focus': {
           borderColor: '#00f5ff',
           boxShadow:
@@ -1045,6 +1303,78 @@ const AddExpense: React.FC = () => {
       buttonHover: {
         transform: 'translateY(-2px)',
         boxShadow: '0 10px 30px rgba(0, 245, 255, 0.4)'
+      },
+
+      // NEW: Currency confirmation dialog styles
+      overlay: {
+        position: 'fixed' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.8)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+        backdropFilter: 'blur(10px)'
+      },
+
+      dialog: {
+        background: 'rgba(26, 26, 46, 0.95)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '20px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
+        padding: '24px',
+        maxWidth: '400px',
+        margin: '20px',
+        color: 'white'
+      },
+
+      dialogTitle: {
+        fontSize: '1.5rem',
+        fontWeight: '700',
+        marginBottom: '16px',
+        background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text'
+      },
+
+      dialogMessage: {
+        fontSize: '16px',
+        lineHeight: '1.5',
+        marginBottom: '24px',
+        color: 'rgba(255, 255, 255, 0.9)'
+      },
+
+      dialogButtons: {
+        display: 'flex',
+        gap: '12px',
+        justifyContent: 'flex-end'
+      },
+
+      dialogButton: {
+        padding: '12px 24px',
+        borderRadius: '8px',
+        fontSize: '14px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        border: 'none',
+        minWidth: '80px'
+      },
+
+      dialogButtonCancel: {
+        background: 'rgba(255, 255, 255, 0.1)',
+        color: 'rgba(255, 255, 255, 0.8)',
+        border: '1px solid rgba(255, 255, 255, 0.2)'
+      },
+
+      dialogButtonConfirm: {
+        background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+        color: 'white'
       },
 
       languageSelector: {
@@ -1201,6 +1531,52 @@ const AddExpense: React.FC = () => {
       styles.languageButtonActive
     ]
   );
+
+  // NEW: Currency confirmation dialog
+  const CurrencyConfirmationDialog = useMemo(() => {
+    if (!showCurrencyConfirmation) return null;
+
+    return (
+      <div style={styles.overlay}>
+        <div style={styles.dialog}>
+          <h3 style={styles.dialogTitle}>{t('currency_conversion_title')}</h3>
+          <p style={styles.dialogMessage}>
+            {t('currency_conversion_message', {
+              currency,
+              rate: conversionRate.toFixed(4),
+              targetCurrency: eventDefaultCurrency
+            })}
+          </p>
+          <div style={styles.dialogButtons}>
+            <button
+              style={{
+                ...styles.dialogButton,
+                ...styles.dialogButtonCancel
+              }}
+              onClick={() => handleCurrencyConfirmation(false)}
+            >
+              {t('cancel')}
+            </button>
+            <button
+              style={{
+                ...styles.dialogButton,
+                ...styles.dialogButtonConfirm
+              }}
+              onClick={() => handleCurrencyConfirmation(true)}
+            >
+              {t('confirm')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }, [
+    showCurrencyConfirmation,
+    currency,
+    conversionRate,
+    eventDefaultCurrency,
+    styles
+  ]);
 
   // Global styles - ALWAYS at the end
   const GlobalStyles = useMemo(
@@ -1468,6 +1844,9 @@ input[type="number"]:focus {
 
       {LanguageSelector}
 
+      {/* NEW: Currency confirmation dialog */}
+      {CurrencyConfirmationDialog}
+
       <div style={styles.addExpenseContainer} className="add-expense-container">
         <div style={styles.formContainer} className="form-container">
           <div
@@ -1541,7 +1920,7 @@ input[type="number"]:focus {
 
                       setSelectedPOI({
                         name: placeName,
-                        placeId: '', // GeoapifyAutocomplete zaten placeId göndermiyor → boş bırak
+                        placeId: '',
                         country: extraData?.country || '',
                         city: extraData?.city || '',
                         district: extraData?.district || '',

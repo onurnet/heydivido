@@ -20,6 +20,14 @@ interface Event {
   created_at: string;
 }
 
+interface User {
+  id: string;
+  auth_user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
 interface Expense {
   id: string;
   event_id: string;
@@ -27,13 +35,37 @@ interface Expense {
   amount: number;
   currency: string;
   paid_by: string;
-  paid_by_name: string;
   expense_date: string;
   category: string;
   created_at: string;
+  conversion_rate_to_event_currency?: number; // Added for total calculation
+  users: User;
 }
 
+// Helper function to get user display name
+const getUserDisplayName = (
+  user: User | null,
+  t: (key: string) => string
+): string => {
+  if (!user) return t('unknown_user');
+
+  if (user.first_name && user.last_name) {
+    return `${user.first_name} ${user.last_name}`;
+  } else if (user.first_name) {
+    return user.first_name;
+  } else if (user.last_name) {
+    return user.last_name;
+  } else if (user.email) {
+    return user.email;
+  } else {
+    return t('unknown_user');
+  }
+};
+
 const ExpenseCard: React.FC<{ expense: Expense }> = ({ expense }) => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
   const styles = {
     card: {
       background: 'rgba(255, 255, 255, 0.05)',
@@ -82,6 +114,9 @@ const ExpenseCard: React.FC<{ expense: Expense }> = ({ expense }) => {
   return (
     <div
       style={styles.card}
+      onClick={() =>
+        navigate(`/events/${expense.event_id}/expenses/${expense.id}/edit`)
+      }
       onMouseEnter={(e) => {
         e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -98,7 +133,9 @@ const ExpenseCard: React.FC<{ expense: Expense }> = ({ expense }) => {
         </div>
       </div>
       <div style={styles.expenseDetails}>
-        <span style={styles.expensePaidBy}>Paid by {expense.paid_by_name}</span>
+        <span style={styles.expensePaidBy}>
+          {t('paid_by_label')}: {getUserDisplayName(expense.users, t)}
+        </span>
         <span style={styles.expenseDate}>
           {new Date(expense.expense_date).toLocaleDateString()}
         </span>
@@ -117,6 +154,14 @@ const EventDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
+
+  // NEW: State for participant count and total expenses
+  const [participantCount, setParticipantCount] = useState<number>(0);
+  const [totalExpenses, setTotalExpenses] = useState<number>(0);
+
+  // NEW: State for participants modal
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [participantsList, setParticipantsList] = useState<User[]>([]);
 
   // PWA: Network status monitoring
   useEffect(() => {
@@ -144,8 +189,18 @@ const EventDetails: React.FC = () => {
     if (eventId) {
       loadEventDetails();
       loadExpenses();
+      loadParticipantCount(); // NEW: Load participant count
     }
   }, [eventId]);
+
+  // NEW: Calculate total expenses when expenses or event changes
+  useEffect(() => {
+    if (event && expenses.length > 0) {
+      calculateTotalExpenses();
+    } else {
+      setTotalExpenses(0);
+    }
+  }, [expenses, event]);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -176,10 +231,15 @@ const EventDetails: React.FC = () => {
 
   const loadExpenses = async () => {
     try {
-      // Önce basit query ile deneyelim
+      // Modified query to include conversion_rate_to_event_currency
       const { data, error } = await supabase
         .from('expenses')
-        .select('*')
+        .select(
+          `
+          *,
+          users!paid_by(id, auth_user_id, first_name, last_name, email)
+        `
+        )
         .eq('event_id', eventId)
         .order('expense_date', { ascending: false });
 
@@ -188,36 +248,141 @@ const EventDetails: React.FC = () => {
         return;
       }
 
-      // Eğer expenses varsa, kullanıcı bilgilerini ayrı ayrı yükleyelim
-      if (data && data.length > 0) {
-        const expensesWithUsers = await Promise.all(
-          data.map(async (expense) => {
-            // Her expense için kullanıcı bilgisini ayrı çek
-            const { data: userData } = await supabase
-              .from('users')
-              .select('first_name, last_name')
-              .eq('auth_user_id', expense.paid_by)
-              .single();
-
-            return {
-              ...expense,
-              paid_by_name: userData
-                ? `${userData.first_name || ''} ${
-                    userData.last_name || ''
-                  }`.trim()
-                : 'Unknown User'
-            };
-          })
-        );
-
-        setExpenses(expensesWithUsers);
-      } else {
-        setExpenses([]);
-      }
+      setExpenses(data || []);
     } catch (err) {
       console.error('Error loading expenses:', err);
       setExpenses([]);
     }
+  };
+
+  // NEW: Load participant count
+  const loadParticipantCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('event_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', eventId)
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('Error loading participant count:', error);
+        return;
+      }
+
+      setParticipantCount(count || 0);
+    } catch (err) {
+      console.error('Error loading participant count:', err);
+      setParticipantCount(0);
+    }
+  };
+
+  // NEW: Load participants details for modal
+  const loadParticipantsDetails = async () => {
+    try {
+      // First, get event participants
+      const { data: participantsData, error: participantsError } =
+        await supabase
+          .from('event_participants')
+          .select('user_id, role')
+          .eq('event_id', eventId)
+          .eq('status', 'active');
+
+      if (participantsError) {
+        console.error('Error loading participants:', participantsError);
+        toast.error(t('failed_to_load_participants'));
+        return;
+      }
+
+      if (!participantsData || participantsData.length === 0) {
+        setParticipantsList([]);
+        return;
+      }
+
+      // Get user IDs from participants
+      const userIds = participantsData.map((p) => p.user_id);
+
+      // Fetch users with first_name and last_name
+      let usersData, usersError;
+
+      // Try with 'id' column first
+      const idResult = await supabase
+        .from('users')
+        .select('id, auth_user_id, first_name, last_name, email')
+        .in('id', userIds);
+
+      if (!idResult.error && idResult.data && idResult.data.length > 0) {
+        usersData = idResult.data;
+        usersError = null;
+      } else {
+        // If 'id' doesn't work, try 'auth_user_id'
+        const authIdResult = await supabase
+          .from('users')
+          .select('id, auth_user_id, first_name, last_name, email')
+          .in('auth_user_id', userIds);
+
+        if (
+          !authIdResult.error &&
+          authIdResult.data &&
+          authIdResult.data.length > 0
+        ) {
+          usersData = authIdResult.data;
+          usersError = null;
+        } else {
+          usersData = null;
+          usersError = authIdResult.error || idResult.error;
+        }
+      }
+
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        toast.error(t('failed_to_load_participants'));
+        return;
+      }
+
+      if (!usersData || usersData.length === 0) {
+        setParticipantsList([]);
+        return;
+      }
+
+      // Transform the data
+      const transformedParticipants: User[] = usersData.map((user: any) => ({
+        id: user.id,
+        auth_user_id: user.auth_user_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email
+      }));
+
+      setParticipantsList(transformedParticipants);
+    } catch (err) {
+      console.error('Error loading participants details:', err);
+      setParticipantsList([]);
+    }
+  };
+
+  // NEW: Calculate total expenses in event's default currency
+  const calculateTotalExpenses = () => {
+    if (!event || !expenses.length) {
+      setTotalExpenses(0);
+      return;
+    }
+
+    const total = expenses.reduce((sum, expense) => {
+      let expenseInEventCurrency: number;
+
+      if (expense.currency === event.default_currency) {
+        // Same currency - use amount as is
+        expenseInEventCurrency = expense.amount;
+      } else {
+        // Different currency - use conversion rate
+        const conversionRate = expense.conversion_rate_to_event_currency || 1;
+        expenseInEventCurrency = expense.amount * conversionRate;
+      }
+
+      return sum + expenseInEventCurrency;
+    }, 0);
+
+    setTotalExpenses(total);
   };
 
   const handleEditEvent = () => {
@@ -236,6 +401,28 @@ const EventDetails: React.FC = () => {
   const formatDuration = (days: number | null) => {
     if (!days) return t('not_specified');
     return `${days} ${days === 1 ? t('day') : t('days')}`;
+  };
+
+  // NEW: Format participant count
+  const formatParticipantCount = (count: number) => {
+    return `${count} ${count === 1 ? t('participant') : t('participants')}`;
+  };
+
+  // NEW: Handle participants modal
+  const handleShowParticipants = async () => {
+    console.log('🔥 handleShowParticipants CLICKED!');
+    console.log(
+      '🔥 Before setState - showParticipantsModal:',
+      showParticipantsModal
+    );
+    setShowParticipantsModal(true);
+    console.log('🔥 After setState called');
+    await loadParticipantsDetails();
+  };
+
+  // NEW: Format total expenses
+  const formatTotalExpenses = (total: number, currency: string) => {
+    return `${total.toFixed(2)} ${currency}`;
   };
 
   // ✅ Düzeltilmiş handleShareEvent fonksiyonu - Basitleştirilmiş ve güvenilir
@@ -441,7 +628,8 @@ const EventDetails: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'center',
         padding:
-          'env(safe-area-inset-top, 20px) env(safe-area-inset-right, 20px) env(safe-area-inset-bottom, 20px) env(safe-area-inset-left, 20px)'
+          'env(safe-area-inset-top, 20px) env(safe-area-inset-right, 20px) env(safe-area-inset-bottom, 120px) env(safe-area-inset-left, 20px)', // Increased bottom padding for BottomNavigation
+        paddingBottom: '120px' // Extra padding for BottomNavigation
       },
 
       floatingElement: {
@@ -556,6 +744,16 @@ const EventDetails: React.FC = () => {
         background: 'rgba(255, 255, 255, 0.05)',
         borderRadius: '12px',
         border: '1px solid rgba(255, 255, 255, 0.1)'
+      },
+
+      // NEW: Clickable info item for participants
+      infoItemClickable: {
+        padding: '12px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease'
       },
 
       infoLabel: {
@@ -679,6 +877,95 @@ const EventDetails: React.FC = () => {
         background: isOnline ? '#4CAF50' : '#f44336',
         boxShadow: `0 0 10px ${isOnline ? '#4CAF50' : '#f44336'}`,
         zIndex: 3
+      },
+
+      // NEW: Participants modal styles
+      overlay: {
+        position: 'fixed' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(255, 0, 0, 0.9)', // RED background to make it super visible
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 99999, // Increased z-index
+        backdropFilter: 'blur(10px)'
+      },
+
+      modal: {
+        background: 'rgba(26, 26, 46, 0.95)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '20px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
+        padding: '24px',
+        maxWidth: '400px',
+        width: '90%',
+        maxHeight: '80vh',
+        overflowY: 'auto' as const,
+        margin: '20px',
+        color: 'white'
+      },
+
+      modalHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px',
+        paddingBottom: '16px',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+      },
+
+      modalTitle: {
+        fontSize: '1.3rem',
+        fontWeight: '700',
+        background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text'
+      },
+
+      closeButton: {
+        background: 'rgba(255, 255, 255, 0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        borderRadius: '8px',
+        padding: '8px 12px',
+        color: '#e2e8f0',
+        fontSize: '14px',
+        fontWeight: '500',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        backdropFilter: 'blur(10px)'
+      },
+
+      participantItem: {
+        padding: '12px 16px',
+        marginBottom: '8px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        transition: 'all 0.3s ease'
+      },
+
+      participantName: {
+        fontSize: '15px',
+        fontWeight: '600',
+        color: 'white',
+        marginBottom: '4px'
+      },
+
+      participantEmail: {
+        fontSize: '13px',
+        color: 'rgba(255, 255, 255, 0.7)'
+      },
+
+      emptyParticipants: {
+        textAlign: 'center' as const,
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: '14px',
+        padding: '20px'
       }
     }),
     [isOnline]
@@ -747,6 +1034,76 @@ const EventDetails: React.FC = () => {
     ]
   );
 
+  // NEW: Participants modal component
+  const ParticipantsModal = () => {
+    console.log(
+      '🚀 ParticipantsModal render - showParticipantsModal:',
+      showParticipantsModal
+    );
+
+    if (!showParticipantsModal) {
+      console.log(
+        '❌ Modal not showing because showParticipantsModal is false'
+      );
+      return null;
+    }
+
+    console.log('✅ Modal should be visible now!');
+
+    return (
+      <div
+        style={styles.overlay}
+        onClick={() => {
+          console.log('🔥 Overlay clicked - closing modal');
+          setShowParticipantsModal(false);
+        }}
+      >
+        <div
+          style={styles.modal}
+          onClick={(e) => {
+            console.log('🔥 Modal content clicked - preventing close');
+            e.stopPropagation();
+          }}
+        >
+          <div style={styles.modalHeader}>
+            <h3 style={styles.modalTitle}>
+              🎯 TEST MODAL - Participants ({participantCount})
+            </h3>
+            <button
+              style={styles.closeButton}
+              onClick={() => {
+                console.log('🔥 Close button clicked');
+                setShowParticipantsModal(false);
+              }}
+            >
+              ✖ Close
+            </button>
+          </div>
+
+          <div>
+            <div style={styles.emptyParticipants}>
+              🔍 Modal is working! Participant count: {participantCount}
+              <br />
+              Participants list length: {participantsList.length}
+            </div>
+
+            {participantsList.length > 0 &&
+              participantsList.map((participant) => (
+                <div key={participant.id} style={styles.participantItem}>
+                  <div style={styles.participantName}>
+                    {getUserDisplayName(participant, t)}
+                  </div>
+                  <div style={styles.participantEmail}>
+                    {participant.email || 'No email'}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Global styles
   const GlobalStyles = useMemo(
     () => (
@@ -800,7 +1157,7 @@ const EventDetails: React.FC = () => {
             gap: 10px !important;
           }
           .event-container {
-            padding: 16px !important;
+            padding: 16px 16px 120px 16px !important; /* Added bottom padding for mobile */
             max-width: 100% !important;
           }
           .event-title {
@@ -876,12 +1233,20 @@ const EventDetails: React.FC = () => {
     []
   );
 
+  console.log(
+    '🎯 EventDetails RENDER - showParticipantsModal:',
+    showParticipantsModal
+  );
+
   if (loading) {
     return (
       <div style={styles.container}>
         {GlobalStyles}
         {FloatingElements}
         {LanguageSelector}
+
+        {/* NEW: Participants Modal */}
+        {ParticipantsModal}
         <div style={styles.eventContainer}>
           <div style={styles.loading}>{t('loading_event_details')}</div>
         </div>
@@ -978,7 +1343,7 @@ const EventDetails: React.FC = () => {
           </div>
         </div>
 
-        {/* Event Info Card */}
+        {/* Event Info Card - UPDATED with new fields */}
         <div style={styles.eventInfoCard} className="event-info-card">
           <h2 style={styles.sectionTitle}>{t('event_details_title')}</h2>
           <div style={styles.infoGrid} className="info-grid">
@@ -998,6 +1363,46 @@ const EventDetails: React.FC = () => {
               <div style={styles.infoLabel}>{t('event_location_label')}</div>
               <div style={styles.infoValue}>
                 {event.place_country} - {event.place_city}
+              </div>
+            </div>
+            {/* NEW: Participants count - CLICKABLE */}
+            <div
+              style={styles.infoItemClickable}
+              onClick={(e) => {
+                console.log('🎯 DIV CLICKED!', e);
+                handleShowParticipants();
+              }}
+              onPointerDown={(e) => {
+                console.log('🎯 POINTER DOWN!', e);
+                handleShowParticipants();
+              }}
+              onMouseEnter={(e) => {
+                console.log('🎯 MOUSE ENTER');
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.borderColor = 'rgba(0, 245, 255, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                console.log('🎯 MOUSE LEAVE');
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+              }}
+            >
+              <div style={styles.infoLabel}>
+                {t('participants_count_label')}
+              </div>
+              <div style={styles.infoValue}>
+                {formatParticipantCount(participantCount)} 🔥 CLICK ME
+              </div>
+            </div>
+            {/* NEW: Total expenses */}
+            <div style={styles.infoItem}>
+              <div style={styles.infoLabel}>
+                {t('total_expenses_label')} ({event.default_currency})
+              </div>
+              <div style={styles.infoValue}>
+                {formatTotalExpenses(totalExpenses, event.default_currency)}
               </div>
             </div>
           </div>
@@ -1034,6 +1439,7 @@ const EventDetails: React.FC = () => {
           )}
         </div>
       </div>
+
       <BottomNavigation />
     </div>
   );

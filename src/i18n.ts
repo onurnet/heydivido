@@ -108,6 +108,14 @@ const resources = {
       expenses_section_title: 'Expenses',
       add_expense_button: 'Add Expense',
       no_expenses_yet: 'No Expenses Yet',
+      participants_count_label: 'Participants',
+      total_expenses_label: 'Total Expenses',
+      participant: 'participant',
+      participants: 'participants',
+      participants_list_title: 'Event Participants',
+      close: 'Close',
+      no_email: 'No email provided',
+      loading_participants: 'Loading participants...',
 
       //  EVENT DETAIL EDIT STRINGS
       only_admin_can_edit: 'Only admins can edit this event',
@@ -203,6 +211,18 @@ const resources = {
       split_method_label: 'Split Method',
       expense_description_label: 'Expense Description',
       min_3_char: 'Minimum 3 characters',
+      paid_by_label: 'Paid By',
+      unknown_user: 'Unknown User',
+      currency_conversion_title: 'Currency Conversion',
+      currency_conversion_message:
+        'This expense is in {{currency}}. The current rate is 1 {{currency}} = {{rate}} {{targetCurrency}}. This will be used for calculations. Do you confirm?',
+      confirm: 'OK',
+      cancel: 'Cancel',
+
+      // EDIT EXPENSE STRINGS
+      edit_expense: 'Edit Expense',
+      update_expense: 'Update Expense',
+      delete_expense: 'Delete Expense',
 
       // LANDING PAGE STRINGS
       hero: {
@@ -462,6 +482,14 @@ const resources = {
       share_event_button: 'Paylaş',
       expenses_section_title: 'Harcamalar',
       add_expense_button: 'Harcama Ekle',
+      participants_count_label: 'Katılımcılar',
+      total_expenses_label: 'Toplam Giderler',
+      participant: 'katılımcı',
+      participants: 'katılımcı',
+      participants_list_title: 'Etkinlik Katılımcıları',
+      close: 'Kapat',
+      no_email: 'Email adresi yok',
+      loading_participants: 'Katılımcılar yükleniyor...',
 
       //  EVENT DETAIL EDIT STRINGS
       only_admin_can_edit: 'Sadece yöneticiler bu etkinliği düzenleyebilir',
@@ -559,6 +587,18 @@ const resources = {
       split_method_label: 'Bölüştürme Şekli',
       expense_description_label: 'Harcama açıklaması',
       min_3_char: 'Minimum 3 karakter giriniz',
+      paid_by_label: 'Ödeyen',
+      unknown_user: 'Bilinmeyen Kullanıcı',
+      currency_conversion_title: 'Kur Dönüştürme',
+      currency_conversion_message:
+        'Bu harcama {{currency}} cinsindendir. Güncel kur: 1 {{currency}} = {{rate}} {{targetCurrency}}. Hesaplamalarda bu kur kullanılacaktır. Onaylıyor musunuz?',
+      confirm: 'Tamam',
+      cancel: 'İptal',
+
+      // EDIT EXPENSE STRINGS
+      edit_expense: 'Harcamayı Düzenle',
+      update_expense: 'Harcamayı Güncelle',
+      delete_expense: 'Harcamayı Sil',
 
       // LANDING PAGE STRINGS
       hero: {
