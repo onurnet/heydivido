@@ -19,6 +19,8 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
   const [inputValue, setInputValue] = useState(value || '');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasValidSelection, setHasValidSelection] = useState(!!value);
   const timeoutRef = useRef<any>(null);
 
   const API_KEY = '66b81ba042ea433397c02596a78eea32';
@@ -26,6 +28,7 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
   // Update input value when prop value changes
   useEffect(() => {
     setInputValue(value || '');
+    setHasValidSelection(!!value);
   }, [value]);
 
   const buildApiUrl = (text: string): string => {
@@ -38,7 +41,7 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
         )}&type=country&limit=5&apiKey=${API_KEY}`;
 
       case 'city':
-        let cityUrl = `${baseUrl}/v1/geocode/search?text=${encodeURIComponent(
+        let cityUrl = `${baseUrl}/v1/geocode/autocomplete?text=${encodeURIComponent(
           text
         )}&type=city&limit=5&apiKey=${API_KEY}`;
         if (countryCode) {
@@ -72,36 +75,87 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
     }
   };
 
+  const buildFallbackCityUrl = (text: string): string => {
+    const baseUrl = 'https://api.geoapify.com';
+    let cityUrl = `${baseUrl}/v1/geocode/search?text=${encodeURIComponent(
+      text
+    )}&type=locality&limit=5&apiKey=${API_KEY}`;
+    if (countryCode) {
+      cityUrl += `&filter=countrycode:${countryCode.toLowerCase()}`;
+    }
+    return cityUrl;
+  };
+
   const handleFetchSuggestions = async (text: string) => {
-    if (!text || text.length < 2) {
+    // Minimum 3 karakter gerektir (daha katı)
+    if (!text || text.length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
+      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
+    setHasValidSelection(false); // Yeni arama yapılıyorsa geçerli seçim yok
+
     try {
       const url = buildApiUrl(text);
-      if (!url) return;
+      if (!url) {
+        setIsLoading(false);
+        return;
+      }
 
-      const response = await axios.get(url);
-      const features = response.data.features || [];
+      let response = await axios.get(url);
+      let features = response.data.features || [];
+
+      // Eğer şehir araması boş gelirse, fallback dene
+      if (type === 'city' && features.length === 0) {
+        try {
+          const fallbackUrl = buildFallbackCityUrl(text);
+          const fallbackResponse = await axios.get(fallbackUrl);
+          features = fallbackResponse.data.features || [];
+        } catch (fallbackErr) {
+          console.error('Fallback city search failed:', fallbackErr);
+        }
+      }
+
       setSuggestions(features);
       setShowSuggestions(features.length > 0);
     } catch (err) {
       console.error('Error fetching suggestions:', err);
-      setSuggestions([]);
-      setShowSuggestions(false);
+
+      if (type === 'city') {
+        try {
+          const fallbackUrl = buildFallbackCityUrl(text);
+          const fallbackResponse = await axios.get(fallbackUrl);
+          const features = fallbackResponse.data.features || [];
+          setSuggestions(features);
+          setShowSuggestions(features.length > 0);
+        } catch (fallbackErr) {
+          console.error('Fallback failed:', fallbackErr);
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
+    setHasValidSelection(false); // Değişiklik yapıldığında geçerli seçim kaldır
 
     clearTimeout(timeoutRef.current);
+
+    // Debounce süresini artırdık (500ms)
     timeoutRef.current = setTimeout(() => {
       handleFetchSuggestions(newValue);
-    }, 300);
+    }, 500);
   };
 
   const getDisplayText = (suggestion: any): string => {
@@ -112,7 +166,12 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
         return props.country || props.name || '';
       case 'city':
         return (
-          props.city || props.name || props.locality || props.municipality || ''
+          props.city ||
+          props.name ||
+          props.locality ||
+          props.municipality ||
+          props.town ||
+          ''
         );
       case 'district':
         return (
@@ -131,6 +190,7 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
 
     setInputValue(displayText);
     setShowSuggestions(false);
+    setHasValidSelection(true); // Geçerli seçim yapıldı
 
     switch (type) {
       case 'country':
@@ -158,48 +218,144 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
   const getPlaceholder = (): string => {
     switch (type) {
       case 'country':
-        return 'Search country...';
+        return 'Minimum 3 karakter yazın...';
       case 'city':
-        return 'Search city...';
+        return 'Minimum 3 karakter yazın...';
       case 'district':
-        return 'Search district...';
+        return 'Minimum 3 karakter yazın...';
       case 'poi':
-        return 'Search places...';
+        return 'Minimum 3 karakter yazın...';
       default:
         return `Search ${type}...`;
     }
   };
 
+  // Input stilini duruma göre ayarla
+  const getInputStyle = () => {
+    const baseStyle = {
+      width: '100%',
+      padding: '16px',
+      minHeight: '44px',
+      background: 'rgba(255, 255, 255, 0.05)',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRadius: '12px',
+      fontSize: '16px',
+      color: 'white',
+      fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+      transition: 'all 0.3s ease',
+      outline: 'none',
+      boxSizing: 'border-box' as const,
+      WebkitAppearance: 'none' as const,
+      WebkitTapHighlightColor: 'transparent'
+    };
+
+    // Loading durumunda farklı stil
+    if (isLoading) {
+      return {
+        ...baseStyle,
+        borderColor: '#ffa500',
+        boxShadow: '0 0 10px rgba(255, 165, 0, 0.3)'
+      };
+    }
+
+    // Geçerli seçim varsa yeşil border
+    if (hasValidSelection && inputValue.length > 0) {
+      return {
+        ...baseStyle,
+        borderColor: '#4CAF50',
+        boxShadow: '0 0 10px rgba(76, 175, 80, 0.3)'
+      };
+    }
+
+    // Geçersiz durumda (yazılıyor ama seçim yok)
+    if (!hasValidSelection && inputValue.length >= 3) {
+      return {
+        ...baseStyle,
+        borderColor: '#ff6b6b',
+        boxShadow: '0 0 10px rgba(255, 107, 107, 0.2)'
+      };
+    }
+
+    return baseStyle;
+  };
+
   return (
     <div style={{ position: 'relative' }}>
-      <input
-        style={{
-          width: '100%',
-          padding: '16px',
-          minHeight: '44px',
-          background: 'rgba(255, 255, 255, 0.05)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '12px',
-          fontSize: '16px',
-          color: 'white',
-          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
-          transition: 'all 0.3s ease',
-          outline: 'none',
-          boxSizing: 'border-box',
-          WebkitAppearance: 'none',
-          WebkitTapHighlightColor: 'transparent'
-        }}
-        type="text"
-        placeholder={getPlaceholder()}
-        value={inputValue}
-        onChange={handleInputChange}
-        onFocus={() => {
-          if (suggestions.length > 0) {
-            setShowSuggestions(true);
-          }
-        }}
-        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-      />
+      <div style={{ position: 'relative' }}>
+        <input
+          style={getInputStyle()}
+          type="text"
+          placeholder={getPlaceholder()}
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={() => {
+            if (suggestions.length > 0) {
+              setShowSuggestions(true);
+            }
+          }}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+        />
+
+        {/* Loading indicator */}
+        {isLoading && (
+          <div
+            style={{
+              position: 'absolute',
+              right: '16px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#ffa500',
+              fontSize: '14px'
+            }}
+          >
+            🔍
+          </div>
+        )}
+
+        {/* Valid selection indicator */}
+        {hasValidSelection && !isLoading && (
+          <div
+            style={{
+              position: 'absolute',
+              right: '16px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#4CAF50',
+              fontSize: '14px'
+            }}
+          >
+            ✓
+          </div>
+        )}
+      </div>
+
+      {/* Typing hint */}
+      {inputValue.length > 0 && inputValue.length < 3 && (
+        <div
+          style={{
+            fontSize: '12px',
+            color: '#ffa500',
+            marginTop: '4px',
+            paddingLeft: '4px'
+          }}
+        >
+          {3 - inputValue.length} karakter daha yazın...
+        </div>
+      )}
+
+      {/* Loading message */}
+      {isLoading && (
+        <div
+          style={{
+            fontSize: '12px',
+            color: '#ffa500',
+            marginTop: '4px',
+            paddingLeft: '4px'
+          }}
+        >
+          Aranıyor...
+        </div>
+      )}
 
       {showSuggestions && suggestions.length > 0 && (
         <div
