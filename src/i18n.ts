@@ -6,7 +6,7 @@ const resources = {
     translation: {
       greeting: 'Hello, {{name}}',
       wallet_soon: 'Wallet (Soon)',
-      gezgin_no_label: 'Your Gezgin No',
+      gezgin_no_label: 'Divido No',
       copy_btn: 'Copy',
       copy_success: 'Copied!',
       total_expenses: 'Total Expenses',
@@ -280,7 +280,7 @@ const resources = {
     translation: {
       greeting: 'Merhaba, {{name}}',
       wallet_soon: 'Cüzdan (Yakında)',
-      gezgin_no_label: 'Gezgin Numaranız',
+      gezgin_no_label: 'Divido No',
       copy_btn: 'Kopyala',
       copy_success: 'Kopyalandı!',
       total_expenses: 'Toplam Harcamalar',
