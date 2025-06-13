@@ -202,6 +202,7 @@ const resources = {
       expense_type_label: 'Expense Type',
       split_method_label: 'Split Method',
       expense_description_label: 'Expense Description',
+      min_3_char: 'Minimum 3 characters',
 
       // LANDING PAGE STRINGS
       hero: {
@@ -557,6 +558,7 @@ const resources = {
       expense_type_label: 'Harcama Tipi',
       split_method_label: 'Bölüştürme Şekli',
       expense_description_label: 'Harcama açıklaması',
+      min_3_char: 'Minimum 3 karakter giriniz',
 
       // LANDING PAGE STRINGS
       hero: {

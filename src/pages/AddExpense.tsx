@@ -1485,76 +1485,64 @@ const AddExpense: React.FC = () => {
               <div style={styles.inputGroup}>
                 <label style={styles.label}>{t('select_place')}</label>
                 <div style={styles.placeInputContainer}>
-                  {/* Manual Place Input */}
-                  <input
-                    style={styles.input}
-                    type="text"
-                    placeholder="e.g., Starbucks İstanbul Çekmeköy Merkez"
-                    value={manualPlaceName}
-                    onChange={(e) => setManualPlaceName(e.target.value)}
-                    onFocus={(e) =>
-                      Object.assign(e.target.style, styles.inputFocus)
-                    }
-                    onBlur={(e) => Object.assign(e.target.style, styles.input)}
+                  <GeoapifyAutocomplete
+                    type="poi"
+                    onSelect={(placeName, extraData) => {
+                      console.log('EXTRA DATA:', extraData);
+
+                      setSelectedPOI({
+                        name: placeName,
+                        placeId: '', // GeoapifyAutocomplete zaten placeId göndermiyor → boş bırak
+                        country: extraData?.country || '',
+                        city: extraData?.city || '',
+                        district: extraData?.district || '',
+                        street: extraData?.street || '',
+                        lat: extraData?.lat || 0,
+                        lon: extraData?.lon || 0
+                      });
+
+                      const detailedName = [
+                        placeName,
+                        extraData?.city,
+                        extraData?.district,
+                        extraData?.street
+                      ]
+                        .filter(Boolean)
+                        .join(' • ');
+
+                      setManualPlaceName(detailedName);
+                    }}
+                    renderOption={(place) => {
+                      console.log('PLACE:', place);
+                      const name =
+                        place.name ||
+                        place.properties?.name ||
+                        place.formatted ||
+                        '';
+                      const address = place.address || place.properties || {};
+
+                      return (
+                        <div
+                          style={{ display: 'flex', flexDirection: 'column' }}
+                        >
+                          <div style={{ fontWeight: 'bold', color: '#fff' }}>
+                            {name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              color: 'rgba(255, 255, 255, 0.5)',
+                              marginTop: '2px'
+                            }}
+                          >
+                            {[address.city, address.district, address.street]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </div>
+                        </div>
+                      );
+                    }}
                   />
-
-                  {/* Toggle Autocomplete */}
-                  <button
-                    type="button"
-                    style={styles.autocompleteToggle}
-                    onClick={() => setShowAutocomplete(!showAutocomplete)}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background =
-                        'rgba(0, 245, 255, 0.1)';
-                      e.currentTarget.style.borderColor =
-                        'rgba(0, 245, 255, 0.4)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background =
-                        'rgba(255, 255, 255, 0.05)';
-                      e.currentTarget.style.borderColor =
-                        'rgba(255, 255, 255, 0.2)';
-                    }}
-                  >
-                    {showAutocomplete
-                      ? '📍 Hide suggestions'
-                      : '🗺️ Search places'}
-                  </button>
-
-                  {/* Autocomplete (when toggled) */}
-                  {showAutocomplete && (
-                    <div style={{ marginTop: '12px' }}>
-                      <GeoapifyAutocomplete
-                        type="poi"
-                        value={selectedPOI?.name || ''}
-                        onSelect={(placeId, placeName, extraData) => {
-                          setSelectedPOI({
-                            name: placeName,
-                            placeId: placeId,
-                            country: extraData.country,
-                            city: extraData.city,
-                            district: extraData.district,
-                            street: extraData.street,
-                            lat: extraData.lat,
-                            lon: extraData.lon
-                          });
-
-                          // Auto-fill manual input with detailed place info
-                          const detailedName = [
-                            placeName,
-                            extraData.city,
-                            extraData.district,
-                            extraData.street
-                          ]
-                            .filter(Boolean)
-                            .join(' ');
-
-                          setManualPlaceName(detailedName);
-                          setShowAutocomplete(false);
-                        }}
-                      />
-                    </div>
-                  )}
 
                   {/* Selected POI Preview */}
                   {selectedPOI && (
@@ -1562,6 +1550,7 @@ const AddExpense: React.FC = () => {
                       📍 {selectedPOI.name}
                       {selectedPOI.city && ` • ${selectedPOI.city}`}
                       {selectedPOI.district && ` • ${selectedPOI.district}`}
+                      {selectedPOI.street && ` • ${selectedPOI.street}`}
                       {selectedPOI.country && ` • ${selectedPOI.country}`}
                     </div>
                   )}

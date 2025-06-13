@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 
 interface GeoapifyAutocompleteProps {
   type: 'country' | 'city' | 'district' | 'poi';
@@ -7,6 +8,7 @@ interface GeoapifyAutocompleteProps {
   cityName?: string;
   value: string;
   onSelect: (value: string, extraInfo?: any) => void;
+  renderOption?: (suggestion: any) => React.ReactNode;
 }
 
 const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
@@ -14,13 +16,19 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
   countryCode,
   cityName,
   value,
-  onSelect
+  onSelect,
+  renderOption
 }) => {
+  const { t } = useTranslation();
   const [inputValue, setInputValue] = useState(value || '');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasValidSelection, setHasValidSelection] = useState(!!value);
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lon: number;
+  } | null>(null);
   const timeoutRef = useRef<any>(null);
 
   const API_KEY = '66b81ba042ea433397c02596a78eea32';
@@ -30,6 +38,39 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
     setInputValue(value || '');
     setHasValidSelection(!!value);
   }, [value]);
+
+  // Get user location once
+  useEffect(() => {
+    if (type === 'poi') {
+      if (!navigator.geolocation) {
+        console.warn('Geolocation is not supported by this browser.');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude
+          });
+          console.log(
+            'User location:',
+            pos.coords.latitude,
+            pos.coords.longitude
+          );
+        },
+        (err) => {
+          console.error('Failed to get user location:', err);
+          setUserLocation(null); // fallback
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+  }, [type]);
 
   const buildApiUrl = (text: string): string => {
     const baseUrl = 'https://api.geoapify.com';
@@ -68,6 +109,10 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
         if (cityName) {
           poiUrl += `&filter=place:${encodeURIComponent(cityName)}`;
         }
+        // EKLE → konum varsa bias parametresi ekle
+        if (userLocation) {
+          poiUrl += `&bias=proximity:${userLocation.lon},${userLocation.lat}`;
+        }
         return poiUrl;
 
       default:
@@ -87,7 +132,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
   };
 
   const handleFetchSuggestions = async (text: string) => {
-    // Minimum 3 karakter gerektir (daha katı)
     if (!text || text.length < 3) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -96,7 +140,7 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
     }
 
     setIsLoading(true);
-    setHasValidSelection(false); // Yeni arama yapılıyorsa geçerli seçim yok
+    setHasValidSelection(false);
 
     try {
       const url = buildApiUrl(text);
@@ -108,7 +152,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
       let response = await axios.get(url);
       let features = response.data.features || [];
 
-      // Eğer şehir araması boş gelirse, fallback dene
       if (type === 'city' && features.length === 0) {
         try {
           const fallbackUrl = buildFallbackCityUrl(text);
@@ -148,11 +191,10 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
-    setHasValidSelection(false); // Değişiklik yapıldığında geçerli seçim kaldır
+    setHasValidSelection(false);
 
     clearTimeout(timeoutRef.current);
 
-    // Debounce süresini artırdık (500ms)
     timeoutRef.current = setTimeout(() => {
       handleFetchSuggestions(newValue);
     }, 500);
@@ -190,7 +232,7 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
 
     setInputValue(displayText);
     setShowSuggestions(false);
-    setHasValidSelection(true); // Geçerli seçim yapıldı
+    setHasValidSelection(true);
 
     switch (type) {
       case 'country':
@@ -207,7 +249,11 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
           lat: suggestion.geometry?.coordinates[1],
           lon: suggestion.geometry?.coordinates[0],
           address: props.formatted,
-          categories: props.categories
+          categories: props.categories,
+          country: props.country || '',
+          city: props.city || '',
+          district: props.district || '',
+          street: props.street || ''
         });
         break;
       default:
@@ -218,19 +264,18 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
   const getPlaceholder = (): string => {
     switch (type) {
       case 'country':
-        return 'Minimum 3 karakter yazın...';
+        return t('min_3_char');
       case 'city':
-        return 'Minimum 3 karakter yazın...';
+        return t('min_3_char');
       case 'district':
-        return 'Minimum 3 karakter yazın...';
+        return t('min_3_char');
       case 'poi':
-        return 'Minimum 3 karakter yazın...';
+        return t('min_3_char');
       default:
         return `Search ${type}...`;
     }
   };
 
-  // Input stilini duruma göre ayarla
   const getInputStyle = () => {
     const baseStyle = {
       width: '100%',
@@ -244,12 +289,9 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
       fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
       transition: 'all 0.3s ease',
       outline: 'none',
-      boxSizing: 'border-box' as const,
-      WebkitAppearance: 'none' as const,
-      WebkitTapHighlightColor: 'transparent'
+      boxSizing: 'border-box' as const
     };
 
-    // Loading durumunda farklı stil
     if (isLoading) {
       return {
         ...baseStyle,
@@ -258,7 +300,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
       };
     }
 
-    // Geçerli seçim varsa yeşil border
     if (hasValidSelection && inputValue.length > 0) {
       return {
         ...baseStyle,
@@ -267,7 +308,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
       };
     }
 
-    // Geçersiz durumda (yazılıyor ama seçim yok)
     if (!hasValidSelection && inputValue.length >= 3) {
       return {
         ...baseStyle,
@@ -296,7 +336,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
           onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
         />
 
-        {/* Loading indicator */}
         {isLoading && (
           <div
             style={{
@@ -312,7 +351,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
           </div>
         )}
 
-        {/* Valid selection indicator */}
         {hasValidSelection && !isLoading && (
           <div
             style={{
@@ -329,7 +367,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
         )}
       </div>
 
-      {/* Typing hint */}
       {inputValue.length > 0 && inputValue.length < 3 && (
         <div
           style={{
@@ -343,7 +380,6 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
         </div>
       )}
 
-      {/* Loading message */}
       {isLoading && (
         <div
           style={{
@@ -397,7 +433,7 @@ const GeoapifyAutocomplete: React.FC<GeoapifyAutocompleteProps> = ({
                 e.currentTarget.style.color = '#e2e8f0';
               }}
             >
-              {getDisplayText(sugg)}
+              {renderOption ? renderOption(sugg) : getDisplayText(sugg)}
             </div>
           ))}
         </div>
