@@ -268,6 +268,18 @@ const resources = {
       failed_load_settlements: 'Failed to load settlements',
       back: 'Back',
 
+      //  FINANCIAL SUMMARY STRINGS
+      title: '💰 My Financial Status',
+      loading: 'Loading...',
+      calculating: 'Calculating...',
+      activeEvents_title: 'My Active Events',
+      activeEvents_noEvents: 'No active events yet',
+      activeEvents_eventsCount: 'active event',
+      activeEvents_eventsCount_plural: 'active events',
+      expectedPayments_title: 'Expected Payments',
+      expectedPayments_noPayments: 'No pending payments',
+      expectedPayments_currency: 'TL expected',
+
       // LANDING PAGE STRINGS
       hero: {
         title: 'Divido',
@@ -687,6 +699,18 @@ const resources = {
       calculating_settlements: 'Hesaplar hesaplanıyor',
       failed_load_settlements: 'Hesaplar yüklenemedi',
       back: 'Geri',
+
+      //  FINANCIAL SUMMARY STRINGS
+      title: '💰 Mali Durumum',
+      loading: 'Yükleniyor...',
+      calculating: 'Hesaplanıyor...',
+      activeEvents_title: 'Açık Etkinliklerim',
+      activeEvents_noEvents: 'Henüz aktif etkinlik yok',
+      activeEvents_eventsCount: 'aktif etkinlik',
+      activeEvents_eventsCount_plural: 'aktif etkinlik',
+      expectedPayments_title: 'Beklediğim Ödemeler',
+      expectedPayments_noPayments: 'Bekleyen ödeme yok',
+      expectedPayments_currency: 'TL alacağım',
 
       // LANDING PAGE STRINGS
       hero: {
