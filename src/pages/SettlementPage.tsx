@@ -183,7 +183,7 @@ const SettlementPage: React.FC = () => {
       console.log('Enriched expenses:', enrichedExpenses);
 
       // Step 6: Calculate settlements
-      const calculatedSettlements = calculateSettlements(
+      const calculatedSettlements = await calculateSettlements(
         enrichedExpenses,
         participantUsers,
         eventData
@@ -199,11 +199,11 @@ const SettlementPage: React.FC = () => {
     }
   };
 
-  const calculateSettlements = (
+  const calculateSettlements = async (
     expenses: any[],
     participants: User[],
     eventData: any
-  ): SettlementItem[] => {
+  ): Promise<SettlementItem[]> => {
     console.log('Starting settlement calculation...');
     console.log('Participants:', participants);
     console.log('Expenses:', expenses);
@@ -219,16 +219,14 @@ const SettlementPage: React.FC = () => {
       return [];
     }
 
-    // Create a map of user balances
+    // Create a map of user balances and names
     const balances: { [userId: string]: number } = {};
-    // ✅ localUserNames olarak değiştirildi
     const localUserNames: { [userId: string]: string } = {};
 
     // Initialize balances for all participants
     participants.forEach((user) => {
       const userId = user.auth_user_id || user.id;
       balances[userId] = 0;
-      // ✅ localUserNames kullanılıyor
       localUserNames[userId] = getUserDisplayName(user);
     });
 
@@ -238,103 +236,188 @@ const SettlementPage: React.FC = () => {
     console.log('Initial balances:', balances);
     console.log('User names:', localUserNames);
 
-    const participantCount = participants.length;
-
     // Prepare map: real_id → auth_user_id
     const idToAuthUserIdMap: { [key: string]: string } = {};
     participants.forEach((user) => {
       idToAuthUserIdMap[user.id] = user.auth_user_id;
     });
 
-    // Calculate total expenses in event currency
-    let totalExpenses = 0;
-    expenses.forEach((expense) => {
-      let expenseInEventCurrency = expense.amount;
-      if (expense.currency !== eventData.default_currency) {
-        const conversionRate = expense.conversion_rate_to_event_currency || 1;
-        expenseInEventCurrency = expense.amount * conversionRate;
-      }
-      totalExpenses += expenseInEventCurrency;
-    });
-
-    console.log('Total expenses:', totalExpenses);
-
-    const sharePerPerson = totalExpenses / participantCount;
-    console.log('Share per person:', sharePerPerson);
-
-    // Calculate what each person paid
-    expenses.forEach((expense) => {
+    // ✅ NEW APPROACH: Harcama bazlı paylaştırma
+    // Her harcamayı sadece o harcamaya katılan kişiler arasında paylaştır
+    for (const expense of expenses) {
       let expenseInEventCurrency = expense.amount;
       if (expense.currency !== eventData.default_currency) {
         const conversionRate = expense.conversion_rate_to_event_currency || 1;
         expenseInEventCurrency = expense.amount * conversionRate;
       }
 
-      // Fix: map paid_by (users.id) → auth_user_id
-      const paidByAuthUserId =
-        idToAuthUserIdMap[expense.paid_by] || expense.paid_by;
+      // Harcamaya katılan kişileri bul
+      let expenseParticipants: string[] = [];
+
+      // Önce expense.participants dizisini kontrol et
+      if (expense.participants && Array.isArray(expense.participants)) {
+        // expense.participants real_id listesi olabilir, auth_user_id'ye çevir
+        expenseParticipants = expense.participants
+          .map((participantId) => {
+            const participant = participants.find(
+              (p) => p.id === participantId || p.auth_user_id === participantId
+            );
+            return participant
+              ? participant.auth_user_id || participant.id
+              : null;
+          })
+          .filter(Boolean) as string[];
+      } else {
+        // expense_participants tablosundan çek
+        try {
+          const { data: expenseParticipantsData, error } = await supabase
+            .from('expenses_participants')
+            .select('user_id')
+            .eq('expense_id', expense.id);
+
+          if (error) {
+            console.warn(
+              `Error loading participants for expense ${expense.id}:`,
+              error
+            );
+            // Fallback: tüm etkinlik katılımcıları
+            expenseParticipants = participants.map(
+              (p) => p.auth_user_id || p.id
+            );
+          } else {
+            // ✅ expense_participants.user_id zaten auth_user_id olarak kaydedilmiş
+            expenseParticipants =
+              expenseParticipantsData?.map((ep) => ep.user_id) || [];
+            console.log(
+              `Expense ${expense.id} participants from DB (auth_user_ids):`,
+              expenseParticipants
+            );
+          }
+        } catch (err) {
+          console.warn(
+            `Error fetching expense participants for ${expense.id}:`,
+            err
+          );
+          // Fallback: tüm etkinlik katılımcıları
+          expenseParticipants = participants.map((p) => p.auth_user_id || p.id);
+        }
+      }
+
+      // Eğer hiç katılımcı yoksa, fallback olarak tüm etkinlik katılımcıları
+      if (expenseParticipants.length === 0) {
+        expenseParticipants = participants.map((p) => p.auth_user_id || p.id);
+      }
 
       console.log(
-        `Processing expense: ${expense.description}, amount: ${expenseInEventCurrency}, paid_by: ${paidByAuthUserId}`
+        `Expense: ${expense.description}, Amount: ${expenseInEventCurrency}, Participants (auth_user_ids):`,
+        expenseParticipants
       );
-      console.log(`Available balance keys:`, Object.keys(balances));
 
+      // Ödeyenin bakiyesini artır (ne kadar ödediği)
+      const paidByAuthUserId =
+        idToAuthUserIdMap[expense.paid_by] || expense.paid_by;
       if (balances.hasOwnProperty(paidByAuthUserId)) {
         balances[paidByAuthUserId] += expenseInEventCurrency;
         console.log(
-          `${paidByAuthUserId} paid ${expenseInEventCurrency}, new balance: ${balances[paidByAuthUserId]}`
-        );
-      } else {
-        console.log(
-          `⚠️ Expense paid_by ${expense.paid_by} (mapped: ${paidByAuthUserId}) not found in balances!`
+          `${localUserNames[paidByAuthUserId]} paid ${expenseInEventCurrency}`
         );
       }
-    });
 
-    // Calculate net balances (what they paid minus what they should pay)
-    Object.keys(balances).forEach((userId) => {
-      balances[userId] -= sharePerPerson;
-      console.log(`${userId} net balance: ${balances[userId]}`);
-    });
+      // expense_participants tablosundan pay oranlarını al
+      const { data: expenseShares, error: shareError } = await supabase
+        .from('expenses_participants')
+        .select('user_id, share_amount')
+        .eq('expense_id', expense.id);
 
-    // Generate settlements
-    const settlements: SettlementItem[] = [];
-    const debtors = Object.keys(balances).filter(
-      (userId) => balances[userId] < -0.01
-    );
-    const creditors = Object.keys(balances).filter(
-      (userId) => balances[userId] > 0.01
-    );
+      if (shareError) {
+        console.warn(
+          `⚠️ Could not load shares for expense ${expense.id}`,
+          shareError
+        );
+        continue;
+      }
 
-    console.log('Debtors:', debtors);
-    console.log('Creditors:', creditors);
+      for (const row of expenseShares || []) {
+        const realUserId = row.user_id;
+        const authUserId = idToAuthUserIdMap[realUserId] || realUserId;
+        const shareAmount = row.share_amount || 0;
 
-    // Simple settlement algorithm
-    debtors.forEach((debtor) => {
-      let debtorBalance = Math.abs(balances[debtor]);
-
-      creditors.forEach((creditor) => {
-        if (debtorBalance > 0.01 && balances[creditor] > 0.01) {
-          const settlementAmount = Math.min(debtorBalance, balances[creditor]);
-
-          settlements.push({
-            // ✅ localUserNames kullanılıyor
-            from: localUserNames[debtor] || debtor,
-            to: localUserNames[creditor] || creditor,
-            amount: settlementAmount,
-            currency: eventData.default_currency
-          });
-
-          debtorBalance -= settlementAmount;
-          balances[creditor] -= settlementAmount;
-
+        if (balances.hasOwnProperty(authUserId)) {
+          balances[authUserId] -= shareAmount;
           console.log(
-            `Settlement: ${localUserNames[debtor]} pays ${settlementAmount} to ${localUserNames[creditor]}`
+            `${localUserNames[authUserId]} owes ${shareAmount} for this expense`
           );
         }
-      });
-    });
+      }
+    }
 
+    console.log('Final balances after expense-based calculation:', balances);
+
+    // ✅ SETTLEMENT ALGORITHM: "En büyük alacaklıyı önce kapat" prensibi
+    const settlements: SettlementItem[] = [];
+    const workingBalances = { ...balances }; // Çalışma kopyası
+
+    // Settlement döngüsü - bakiyeler sıfırlanana kadar devam et
+    while (true) {
+      // En büyük alacaklıyı bul (pozitif bakiye)
+      let maxCreditor = '';
+      let maxCredit = 0;
+      Object.keys(workingBalances).forEach((userId) => {
+        if (workingBalances[userId] > maxCredit) {
+          maxCredit = workingBalances[userId];
+          maxCreditor = userId;
+        }
+      });
+
+      // En büyük borçluyu bul (negatif bakiye)
+      let maxDebtor = '';
+      let maxDebt = 0;
+      Object.keys(workingBalances).forEach((userId) => {
+        if (workingBalances[userId] < -maxDebt) {
+          maxDebt = -workingBalances[userId];
+          maxDebtor = userId;
+        }
+      });
+
+      // Eğer anlamlı bir alacaklı veya borçlu yoksa döngüyü sonlandır
+      if (maxCredit < 0.01 || maxDebt < 0.01) {
+        console.log('Settlement completed - no significant balances remaining');
+        break;
+      }
+
+      // Transfer edilecek minimum tutarı hesapla
+      const transferAmount = Math.min(maxCredit, maxDebt);
+
+      console.log(
+        `Settlement: ${localUserNames[maxDebtor]} pays ${transferAmount} to ${localUserNames[maxCreditor]}`
+      );
+
+      // Settlement item'ını ekle
+      settlements.push({
+        from: localUserNames[maxDebtor] || maxDebtor,
+        to: localUserNames[maxCreditor] || maxCreditor,
+        amount: Math.round(transferAmount * 100) / 100, // 2 ondalık basamak
+        currency: eventData.default_currency
+      });
+
+      // Bakiyeleri güncelle
+      workingBalances[maxCreditor] -= transferAmount;
+      workingBalances[maxDebtor] += transferAmount;
+
+      console.log(
+        `Updated balances - ${maxCreditor}: ${workingBalances[maxCreditor]}, ${maxDebtor}: ${workingBalances[maxDebtor]}`
+      );
+
+      // Güvenlik kontrolü - sonsuz döngüyü önle
+      if (settlements.length > participants.length * 2) {
+        console.warn(
+          'Settlement calculation took too many iterations, breaking...'
+        );
+        break;
+      }
+    }
+
+    console.log('Final settlements:', settlements);
     return settlements;
   };
 
