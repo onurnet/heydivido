@@ -45,53 +45,6 @@ interface ExpenseData {
   created_at: string;
 }
 
-// Fetch expense participants shares
-const fetchExpenseParticipantsShares = async () => {
-  if (!expenseId) return;
-
-  try {
-    console.log(
-      `Fetching expense participants shares for expense: ${expenseId}`
-    );
-
-    const { data, error } = await supabase
-      .from('expenses_participants')
-      .select('user_id, share_amount')
-      .eq('expense_id', expenseId);
-
-    if (error) {
-      console.error('Error fetching expense participants shares:', error);
-      toast.error(t('failed_to_load_expense_participants'));
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      console.warn('No expense participants found');
-      setParticipants([]);
-      setParticipantShares({});
-      return;
-    }
-
-    // Build participants and participantShares
-    const loadedParticipants: string[] = [];
-    const loadedShares: { [userId: string]: number } = {};
-
-    data.forEach((row) => {
-      loadedParticipants.push(row.user_id);
-      loadedShares[row.user_id] = row.share_amount;
-    });
-
-    console.log('Loaded expense participants:', loadedParticipants);
-    console.log('Loaded participant shares:', loadedShares);
-
-    setParticipants(loadedParticipants);
-    setParticipantShares(loadedShares);
-  } catch (err) {
-    console.error('Error in fetchExpenseParticipantsShares:', err);
-    toast.error(t('failed_to_load_expense_participants'));
-  }
-};
-
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
   options,
   value,
@@ -412,6 +365,66 @@ const ExpenseEdit: React.FC = () => {
     }
   };
 
+  // Fetch expense participants shares - MOVED INSIDE COMPONENT
+  const fetchExpenseParticipantsShares = async () => {
+    if (!expenseId || eventParticipants.length === 0) return;
+
+    try {
+      console.log(
+        `Fetching expense participants shares for expense: ${expenseId}`
+      );
+
+      const { data, error } = await supabase
+        .from('expenses_participants')
+        .select('user_id, share_amount')
+        .eq('expense_id', expenseId);
+
+      if (error) {
+        console.error('Error fetching expense participants shares:', error);
+        toast.error(t('failed_to_load_expense_participants'));
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn('No expense participants found');
+        setParticipants([]);
+        setParticipantShares({});
+        return;
+      }
+
+      // Map real_id (from expenses_participants) to auth_user_id (for UI)
+      const loadedParticipants: string[] = [];
+      const loadedShares: { [userId: string]: number } = {};
+
+      data.forEach((row) => {
+        // Find the user in eventParticipants by real_id
+        const user = eventParticipants.find((u) => u.real_id === row.user_id);
+        if (user) {
+          // Use auth_user_id (user.id) for UI state
+          loadedParticipants.push(user.id);
+          loadedShares[user.id] = row.share_amount;
+        } else {
+          console.warn(`User not found in event participants: ${row.user_id}`);
+        }
+      });
+
+      console.log(
+        'Loaded expense participants (mapped to auth_user_id):',
+        loadedParticipants
+      );
+      console.log(
+        'Loaded participant shares (mapped to auth_user_id):',
+        loadedShares
+      );
+
+      setParticipants(loadedParticipants);
+      setParticipantShares(loadedShares);
+    } catch (err) {
+      console.error('Error in fetchExpenseParticipantsShares:', err);
+      toast.error(t('failed_to_load_expense_participants'));
+    }
+  };
+
   // Fetch event participants - ONLY for the specific event
   const fetchEventParticipants = async () => {
     if (!eventId) {
@@ -586,12 +599,18 @@ const ExpenseEdit: React.FC = () => {
       await fetchCurrentUser();
       await fetchEventParticipants();
       await fetchExpenseData();
-      await fetchExpenseParticipantsShares();
       setLoading(false);
     };
 
     loadData();
   }, [eventId, expenseId]);
+
+  // Load expense participants after event participants are loaded
+  useEffect(() => {
+    if (eventParticipants.length > 0 && expenseId) {
+      fetchExpenseParticipantsShares();
+    }
+  }, [eventParticipants, expenseId]);
 
   // Calculate participant shares based on split method
   const calculateShares = (
@@ -645,20 +664,26 @@ const ExpenseEdit: React.FC = () => {
     return newShares;
   };
 
-  // Update shares when amount or participants change
+  // Update shares when amount or participants change - but preserve existing shares for loaded expense
   useEffect(() => {
     if (amount && typeof amount === 'number' && participants.length > 0) {
-      const newShares = calculateShares(
-        amount,
-        participants,
-        splitMethod,
-        participantShares
-      );
-      setParticipantShares(newShares);
-    } else {
+      // Only recalculate if this is a new participant selection, not when loading existing expense
+      const hasExistingShares = Object.keys(participantShares).length > 0;
+
+      if (!hasExistingShares || splitMethod === 'equal') {
+        // Calculate shares only if no existing shares OR if equal split is selected
+        const newShares = calculateShares(
+          amount,
+          participants,
+          splitMethod,
+          participantShares
+        );
+        setParticipantShares(newShares);
+      }
+    } else if (participants.length === 0) {
       setParticipantShares({});
     }
-  }, [amount, participants, splitMethod]);
+  }, [amount, participants.length, splitMethod]); // Changed dependency from participants to participants.length
 
   // Handle manual share change
   const handleShareChange = (userId: string, newShare: number) => {
@@ -899,11 +924,17 @@ const ExpenseEdit: React.FC = () => {
       }
 
       // 3️⃣ Insert new participants shares
-      const participantRows = participants.map((userId) => ({
-        expense_id: expenseId,
-        user_id: userId,
-        share_amount: participantShares[userId] || 0
-      }));
+      const participantRows = participants.map((participantId) => {
+        // Find the user to get their real_id for the FK
+        const user = eventParticipants.find((u) => u.id === participantId);
+        const realUserId = user ? user.real_id : participantId; // Fallback to participantId if not found
+
+        return {
+          expense_id: expenseId,
+          user_id: realUserId, // Use real_id for FK
+          share_amount: participantShares[participantId] || 0 // Use auth_user_id for shares lookup
+        };
+      });
 
       const { error: insertError } = await supabase
         .from('expenses_participants')

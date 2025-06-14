@@ -1,9 +1,11 @@
 // src/components/HomePage.tsx
 import BottomNavigation from './BottomNavigation/BottomNavigation';
-import React from 'react';
+import React, { useEffect } from 'react';
 import Header from './Header/Header';
 import SummaryCards from './SummaryCards/SummaryCards';
 import Tabs from './Tabs/Tabs';
+import FinancialSummary from './FinancialSummary/FinancialSummary';
+import PersonalStats from './PersonalStats/PersonalStats';
 import type { User, Summary, Event, Expense } from '../types/types';
 
 interface HomePageProps {
@@ -19,6 +21,21 @@ const HomePage: React.FC<HomePageProps> = ({
   events,
   expenses
 }) => {
+  // Debug: HomePage props'larını kontrol et
+  useEffect(() => {
+    console.log('🔍 HomePage received props:', {
+      user: user?.id,
+      summary,
+      eventsCount: events.length,
+      expensesCount: expenses.length
+    });
+    console.log(
+      '🔍 Summary total_expenses:',
+      summary.total_expenses,
+      typeof summary.total_expenses
+    );
+  }, [user, summary, events, expenses]);
+
   const styles = {
     container: {
       minHeight: '100vh',
@@ -57,10 +74,10 @@ const HomePage: React.FC<HomePageProps> = ({
       maxWidth: '1000px',
       position: 'relative' as const,
       zIndex: 2,
-      overflowY: 'auto', // <== scrollable yapıyoruz
+      overflowY: 'auto',
       minHeight: '600px',
-      maxHeight: 'calc(100vh - 100px)', // <== fixed bottom nav yüksekliği kadar boşluk bırakıyoruz
-      paddingBottom: '100px' // <== içerik altına padding bırakıyoruz ki nav çakışmasın
+      maxHeight: 'calc(100vh - 100px)',
+      paddingBottom: '100px'
     },
 
     headerSection: {
@@ -71,19 +88,32 @@ const HomePage: React.FC<HomePageProps> = ({
 
     contentSection: {
       padding: 'clamp(20px, 4vw, 32px)',
-      background: 'transparent'
+      background: 'transparent',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: 'clamp(20px, 4vw, 32px)'
+    },
+
+    sectionBlock: {
+      background: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: '16px',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      padding: 'clamp(16px, 3vw, 24px)',
+      backdropFilter: 'blur(10px)',
+      transition: 'all 0.3s ease'
     },
 
     networkIndicator: {
       position: 'absolute' as const,
       top: '15px',
-      left: '15px',
+      left: '5px',
       width: '8px',
       height: '8px',
       borderRadius: '50%',
       background: '#4CAF50',
       boxShadow: '0 0 10px #4CAF50',
-      zIndex: 3
+      zIndex: 3,
+      marginRight: '12px'
     }
   };
 
@@ -272,10 +302,23 @@ const HomePage: React.FC<HomePageProps> = ({
 
         {/* Content Section */}
         <div style={styles.contentSection} className="content-section">
-          <SummaryCards summary={summary} />
-          <Tabs events={events} expenses={expenses} />
+          {/* Group 2: My Financial Summary - summary prop eklendi */}
+          <div style={styles.sectionBlock}>
+            <FinancialSummary
+              user={user}
+              events={events}
+              expenses={expenses}
+              summary={summary}
+            />
+          </div>
+
+          {/* Group 3: Fun Personal Stats */}
+          <div style={styles.sectionBlock}>
+            <PersonalStats user={user} events={events} expenses={expenses} />
+          </div>
         </div>
       </div>
+
       {/* Bottom Navigation (fixed) */}
       <BottomNavigation />
     </div>
