@@ -20,82 +20,82 @@ const PersonalStats: React.FC<PersonalStatsProps> = ({
   events,
   expenses
 }) => {
-  const stats = useMemo(() => {
-    // Calculate total events organized (where user is admin)
+  const stats = useMemo<StatItem[]>(() => {
+    if (!user || !events || !expenses) return [];
+
     const eventsOrganized = events.filter(
-      (event) =>
-        event.adminId === user.id || event.organizers?.includes(user.id)
+      (event) => event.created_by === user.auth_user_id
     ).length;
 
-    // Calculate total events participated
+    const participantEventIds = new Set(
+      expenses
+        .filter((e) => e.splits?.some((s) => s.userId === user.id))
+        .map((e) => e.event_id)
+    );
+
     const eventsParticipated = events.filter((event) =>
-      event.participants?.includes(user.id)
+      participantEventIds.has(event.id)
     ).length;
 
-    // Find most frequent co-traveler
     const coTravelerCount: {
       [userId: string]: { count: number; name: string };
     } = {};
-    events
-      .filter((event) => event.participants?.includes(user.id))
-      .forEach((event) => {
-        event.participants?.forEach((participantId) => {
-          if (participantId !== user.id) {
-            if (!coTravelerCount[participantId]) {
-              coTravelerCount[participantId] = {
-                count: 0,
-                name: `User ${participantId.slice(-4)}` // Fallback name
-              };
-            }
-            coTravelerCount[participantId].count++;
+    expenses.forEach((expense) => {
+      expense.splits?.forEach((split) => {
+        if (split.userId !== user.id) {
+          if (!coTravelerCount[split.userId]) {
+            coTravelerCount[split.userId] = {
+              count: 0,
+              name: `User ${split.userId.slice(-4)}`
+            };
           }
-        });
+          coTravelerCount[split.userId].count++;
+        }
       });
+    });
 
     const mostFrequentCoTraveler = Object.values(coTravelerCount).sort(
       (a, b) => b.count - a.count
     )[0];
 
-    // Find event where I spent the most
     const expensesByEvent: {
       [eventId: string]: { total: number; eventName: string; currency: string };
     } = {};
     expenses
-      .filter((expense) => expense.payerId === user.id)
+      .filter((expense) => expense.paid_by === user.id)
       .forEach((expense) => {
-        if (!expensesByEvent[expense.eventId]) {
-          const event = events.find((e) => e.id === expense.eventId);
-          expensesByEvent[expense.eventId] = {
+        if (!expensesByEvent[expense.event_id]) {
+          const event = events.find((e) => e.id === expense.event_id);
+          expensesByEvent[expense.event_id] = {
             total: 0,
             eventName: event?.name || 'Bilinmeyen Etkinlik',
             currency: expense.currency
           };
         }
-        expensesByEvent[expense.eventId].total += expense.amount;
+        expensesByEvent[expense.event_id].total += +expense.amount;
       });
 
     const biggestSpendingEvent = Object.values(expensesByEvent).sort(
       (a, b) => b.total - a.total
     )[0];
 
-    // Find longest trip (event where first and last expense dates are farthest apart)
     const tripDurations: {
       [eventId: string]: { days: number; eventName: string };
     } = {};
     events.forEach((event) => {
       const eventExpenses = expenses.filter(
-        (expense) => expense.eventId === event.id
+        (expense) => expense.event_id === event.id
       );
       if (eventExpenses.length > 1) {
         const dates = eventExpenses
-          .map((expense) => new Date(expense.date))
+          .map(
+            (expense) => new Date(expense.expense_date || expense.created_at)
+          )
           .sort((a, b) => a.getTime() - b.getTime());
-
-        const firstDate = dates[0];
-        const lastDate = dates[dates.length - 1];
-        const diffTime = Math.abs(lastDate.getTime() - firstDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
+        const diffDays = Math.ceil(
+          (dates[dates.length - 1].getTime() - dates[0].getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
         tripDurations[event.id] = {
           days: diffDays,
           eventName: event.name
@@ -107,19 +107,14 @@ const PersonalStats: React.FC<PersonalStatsProps> = ({
       (a, b) => b.days - a.days
     )[0];
 
-    // Find last event organized
     const lastEventOrganized = events
-      .filter(
-        (event) =>
-          event.adminId === user.id || event.organizers?.includes(user.id)
-      )
+      .filter((event) => event.created_by === user.auth_user_id)
       .sort(
         (a, b) =>
-          new Date(b.createdAt || '').getTime() -
-          new Date(a.createdAt || '').getTime()
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )[0];
 
-    const statsData: StatItem[] = [
+    return [
       {
         icon: '👑',
         label: 'Düzenlediğim Etkinlikler',
@@ -161,114 +156,30 @@ const PersonalStats: React.FC<PersonalStatsProps> = ({
         label: 'Son Düzenlediğim',
         value: lastEventOrganized?.name || 'Henüz yok',
         subtext: lastEventOrganized
-          ? new Date(lastEventOrganized.createdAt || '').toLocaleDateString(
-              'tr-TR'
-            )
+          ? new Date(lastEventOrganized.created_at).toLocaleDateString('tr-TR')
           : ''
       }
     ];
-
-    return statsData;
-  }, [user.id, events, expenses]);
-
-  const styles = {
-    container: {
-      width: '100%'
-    },
-
-    title: {
-      fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
-      fontWeight: '600',
-      color: '#ffffff',
-      marginBottom: 'clamp(16px, 3vw, 20px)',
-      textAlign: 'center' as const
-    },
-
-    grid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-      gap: 'clamp(12px, 2vw, 16px)',
-      '@media (max-width: 640px)': {
-        gridTemplateColumns: '1fr',
-        gap: 'clamp(8px, 1.5vw, 12px)'
-      }
-    },
-
-    statCard: {
-      background: 'rgba(255, 255, 255, 0.03)',
-      borderRadius: '12px',
-      padding: 'clamp(16px, 3vw, 20px)',
-      border: '1px solid rgba(255, 255, 255, 0.08)',
-      backdropFilter: 'blur(5px)',
-      transition: 'all 0.3s ease',
-      cursor: 'default'
-    },
-
-    statHeader: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 'clamp(8px, 1.5vw, 12px)',
-      marginBottom: 'clamp(8px, 1.5vw, 12px)'
-    },
-
-    statIcon: {
-      fontSize: 'clamp(1.25rem, 3vw, 1.5rem)'
-    },
-
-    statLabel: {
-      fontSize: 'clamp(0.875rem, 2vw, 1rem)',
-      fontWeight: '500',
-      color: '#00f5ff',
-      flex: 1
-    },
-
-    statValue: {
-      fontSize: 'clamp(1rem, 2.5vw, 1.25rem)',
-      fontWeight: '600',
-      color: '#ffffff',
-      marginBottom: 'clamp(4px, 1vw, 6px)',
-      wordBreak: 'break-word' as const
-    },
-
-    statSubtext: {
-      fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)',
-      color: '#94a3b8',
-      fontStyle: 'italic'
-    },
-
-    // Hover effect
-    statCardHover: {
-      '&:hover': {
-        background: 'rgba(255, 255, 255, 0.05)',
-        transform: 'translateY(-2px)',
-        boxShadow: '0 8px 25px rgba(0, 0, 0, 0.2)'
-      }
-    }
-  };
-
-  const handleCardHover = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-    e.currentTarget.style.transform = 'translateY(-2px)';
-    e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.2)';
-  };
-
-  const handleCardLeave = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-    e.currentTarget.style.transform = 'translateY(0)';
-    e.currentTarget.style.boxShadow = 'none';
-  };
+  }, [user, events, expenses]);
 
   return (
     <div style={styles.container}>
       <h3 style={styles.title}>📊 Kişisel İstatistiklerim</h3>
-
       <div style={styles.grid} className="stats-grid">
         {stats.map((stat, index) => (
           <div
             key={index}
             style={styles.statCard}
-            onMouseEnter={handleCardHover}
-            onMouseLeave={handleCardLeave}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.2)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
           >
             <div style={styles.statHeader}>
               <span style={styles.statIcon}>{stat.icon}</span>
@@ -281,25 +192,60 @@ const PersonalStats: React.FC<PersonalStatsProps> = ({
           </div>
         ))}
       </div>
-
-      <style>
-        {`
-          @media (max-width: 640px) {
-            .stats-grid {
-              grid-template-columns: 1fr !important;
-              gap: 0.75rem !important;
-            }
-          }
-          
-          @media (max-width: 480px) {
-            .stats-grid {
-              gap: 0.5rem !important;
-            }
-          }
-        `}
-      </style>
     </div>
   );
+};
+
+const styles: { [key: string]: React.CSSProperties } = {
+  container: { width: '100%' },
+  title: {
+    fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
+    fontWeight: 600,
+    color: '#fff',
+    marginBottom: 'clamp(16px, 3vw, 20px)',
+    textAlign: 'center'
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: 'clamp(12px, 2vw, 16px)'
+  },
+  statCard: {
+    background: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: '12px',
+    padding: 'clamp(16px, 3vw, 20px)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    backdropFilter: 'blur(5px)',
+    transition: 'all 0.3s ease',
+    cursor: 'default'
+  },
+  statHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'clamp(8px, 1.5vw, 12px)',
+    marginBottom: 'clamp(8px, 1.5vw, 12px)'
+  },
+  statIcon: {
+    fontSize: 'clamp(1.25rem, 3vw, 1.5rem)'
+  },
+  statLabel: {
+    fontSize: 'clamp(0.875rem, 2vw, 1rem)',
+    fontWeight: 500,
+    color: '#00f5ff',
+    flex: 1
+  },
+  statValue: {
+    fontSize: 'clamp(1rem, 2.5vw, 1.25rem)',
+    fontWeight: 600,
+    color: '#ffffff',
+    marginBottom: 'clamp(4px, 1vw, 6px)',
+    wordBreak: 'break-word'
+  },
+  statSubtext: {
+    fontSize: 'clamp(0.75rem, 1.8vw, 0.875rem)',
+    color: '#94a3b8',
+    fontStyle: 'italic'
+  }
 };
 
 export default PersonalStats;

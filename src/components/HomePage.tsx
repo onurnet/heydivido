@@ -1,15 +1,13 @@
 // src/components/HomePage.tsx
 import BottomNavigation from './BottomNavigation/BottomNavigation';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Header from './Header/Header';
-import SummaryCards from './SummaryCards/SummaryCards';
-import Tabs from './Tabs/Tabs';
 import FinancialSummary from './FinancialSummary/FinancialSummary';
 import PersonalStats from './PersonalStats/PersonalStats';
 import type { User, Summary, Event, Expense } from '../types/types';
 
 interface HomePageProps {
-  user: User;
+  user: User | null;
   summary: Summary;
   events: Event[];
   expenses: Expense[];
@@ -21,7 +19,32 @@ const HomePage: React.FC<HomePageProps> = ({
   events,
   expenses
 }) => {
-  // Debug: HomePage props'larını kontrol et
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // Network status monitoring
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Güvenli kontrol: eksik veri varsa gösterme
+  if (!user || !Array.isArray(events) || !Array.isArray(expenses)) {
+    return (
+      <div style={loadingStyles.container}>
+        <div style={loadingStyles.spinner}></div>
+        <div style={loadingStyles.text}>Yükleniyor...</div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     console.log('🔍 HomePage received props:', {
       user: user?.id,
@@ -29,299 +52,358 @@ const HomePage: React.FC<HomePageProps> = ({
       eventsCount: events.length,
       expensesCount: expenses.length
     });
-    console.log(
-      '🔍 Summary total_expenses:',
-      summary.total_expenses,
-      typeof summary.total_expenses
-    );
   }, [user, summary, events, expenses]);
 
-  const styles = {
-    container: {
-      minHeight: '100vh',
-      minHeight: '100dvh',
-      width: '100%',
-      background:
-        'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%)',
-      fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
-      padding:
-        'env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)',
-      position: 'relative' as const,
-      overflow: 'hidden',
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'center',
-      paddingTop: 'clamp(20px, 5vh, 40px)',
-      paddingBottom: 'clamp(20px, 5vh, 40px)',
-      paddingLeft: 'clamp(16px, 4vw, 32px)',
-      paddingRight: 'clamp(16px, 4vw, 32px)'
-    },
+  const styles = useMemo(
+    () => ({
+      container: {
+        minHeight: '100vh',
+        minHeight: '100dvh',
+        width: '100%',
+        background:
+          'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%)',
+        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding:
+          'env(safe-area-inset-top, 20px) env(safe-area-inset-right, 20px) 100px env(safe-area-inset-left, 20px)',
+        position: 'relative' as const,
+        overflow: 'hidden'
+      },
 
-    floatingElement: {
-      position: 'absolute' as const,
-      borderRadius: '50%',
-      filter: 'blur(60px)',
-      animation: 'float 8s ease-in-out infinite'
-    },
+      floatingElement: {
+        position: 'absolute' as const,
+        borderRadius: '50%',
+        filter: 'blur(80px)',
+        animation: 'float 12s ease-in-out infinite',
+        pointerEvents: 'none' as const
+      },
 
-    contentWrapper: {
-      background: 'rgba(26, 26, 46, 0.8)',
-      backdropFilter: 'blur(20px)',
-      borderRadius: '24px',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-      width: '100%',
-      maxWidth: '1000px',
-      position: 'relative' as const,
-      zIndex: 2,
-      overflowY: 'auto',
-      minHeight: '600px',
-      maxHeight: 'calc(100vh - 100px)',
-      paddingBottom: '100px'
-    },
+      mainContainer: {
+        width: '100%',
+        maxWidth: '1000px',
+        position: 'relative' as const,
+        zIndex: 2
+      },
 
-    headerSection: {
-      background: 'rgba(255, 255, 255, 0.02)',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-      backdropFilter: 'blur(10px)'
-    },
+      contentWrapper: {
+        background: 'rgba(26, 26, 46, 0.85)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '20px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
+        overflow: 'hidden',
+        position: 'relative' as const
+      },
 
-    contentSection: {
-      padding: 'clamp(20px, 4vw, 32px)',
-      background: 'transparent',
-      display: 'flex',
-      flexDirection: 'column' as const,
-      gap: 'clamp(20px, 4vw, 32px)'
-    },
+      headerSection: {
+        background: 'rgba(255, 255, 255, 0.02)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        backdropFilter: 'blur(10px)'
+      },
 
-    sectionBlock: {
-      background: 'rgba(255, 255, 255, 0.05)',
-      borderRadius: '16px',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      padding: 'clamp(16px, 3vw, 24px)',
-      backdropFilter: 'blur(10px)',
-      transition: 'all 0.3s ease'
-    },
+      contentSection: {
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '24px'
+      },
 
-    networkIndicator: {
-      position: 'absolute' as const,
-      top: '15px',
-      left: '5px',
-      width: '8px',
-      height: '8px',
-      borderRadius: '50%',
-      background: '#4CAF50',
-      boxShadow: '0 0 10px #4CAF50',
-      zIndex: 3,
-      marginRight: '12px'
-    }
-  };
+      sectionBlock: {
+        background: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: '16px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        padding: '24px',
+        backdropFilter: 'blur(10px)',
+        transition: 'all 0.3s ease',
+        position: 'relative' as const
+      },
 
-  return (
-    <div style={styles.container} className="homepage-container">
-      {/* Background floating elements */}
-      <div
-        style={{
-          ...styles.floatingElement,
-          top: '10%',
-          left: '15%',
-          width: '200px',
-          height: '200px',
-          background: 'rgba(0, 245, 255, 0.1)',
-          animationDelay: '0s'
-        }}
-      />
-      <div
-        style={{
-          ...styles.floatingElement,
-          bottom: '20%',
-          right: '15%',
-          width: '150px',
-          height: '150px',
-          background: 'rgba(255, 0, 110, 0.1)',
-          animationDelay: '4s'
-        }}
-      />
-      <div
-        style={{
-          ...styles.floatingElement,
-          top: '60%',
-          left: '10%',
-          width: '120px',
-          height: '120px',
-          background: 'rgba(131, 56, 236, 0.1)',
-          animationDelay: '7s'
-        }}
-      />
-      <div
-        style={{
-          ...styles.floatingElement,
-          top: '30%',
-          right: '25%',
-          width: '100px',
-          height: '100px',
-          background: 'rgba(255, 193, 7, 0.1)',
-          animationDelay: '2s'
-        }}
-      />
-      <div
-        style={{
-          ...styles.floatingElement,
-          bottom: '40%',
-          left: '25%',
-          width: '80px',
-          height: '80px',
-          background: 'rgba(76, 175, 80, 0.1)',
-          animationDelay: '5s'
-        }}
-      />
+      networkIndicator: {
+        position: 'absolute' as const,
+        top: '12px',
+        left: '12px',
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        background: isOnline ? '#4CAF50' : '#f44336',
+        boxShadow: `0 0 10px ${isOnline ? '#4CAF50' : '#f44336'}`,
+        zIndex: 3
+      }
+    }),
+    [isOnline]
+  );
 
-      {/* CSS Animations */}
+  const loadingStyles = useMemo(
+    () => ({
+      container: {
+        minHeight: '100vh',
+        minHeight: '100dvh',
+        width: '100%',
+        background:
+          'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%)',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '20px',
+        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif'
+      },
+      spinner: {
+        width: '40px',
+        height: '40px',
+        border: '3px solid rgba(255, 255, 255, 0.3)',
+        borderTop: '3px solid #00f5ff',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite'
+      },
+      text: {
+        color: 'rgba(255, 255, 255, 0.8)',
+        fontSize: '16px',
+        fontWeight: '500'
+      }
+    }),
+    []
+  );
+
+  // Floating background elements
+  const FloatingElements = useMemo(
+    () => (
+      <>
+        <div
+          style={{
+            ...styles.floatingElement,
+            top: '15%',
+            left: '10%',
+            width: '150px',
+            height: '150px',
+            background: 'rgba(0, 245, 255, 0.08)',
+            animationDelay: '0s'
+          }}
+        />
+        <div
+          style={{
+            ...styles.floatingElement,
+            bottom: '20%',
+            right: '15%',
+            width: '120px',
+            height: '120px',
+            background: 'rgba(255, 0, 110, 0.08)',
+            animationDelay: '6s'
+          }}
+        />
+        <div
+          style={{
+            ...styles.floatingElement,
+            top: '60%',
+            left: '5%',
+            width: '100px',
+            height: '100px',
+            background: 'rgba(131, 56, 236, 0.08)',
+            animationDelay: '3s'
+          }}
+        />
+        <div
+          style={{
+            ...styles.floatingElement,
+            top: '30%',
+            right: '25%',
+            width: '80px',
+            height: '80px',
+            background: 'rgba(255, 193, 7, 0.08)',
+            animationDelay: '9s'
+          }}
+        />
+      </>
+    ),
+    [styles.floatingElement]
+  );
+
+  const GlobalStyles = useMemo(
+    () => (
       <style>
         {`
-          * {
-            box-sizing: border-box !important;
+        * {
+          box-sizing: border-box !important;
+        }
+        
+        html {
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow-x: hidden !important;
+        }
+        
+        body {
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow-x: hidden !important;
+        }
+        
+        #root {
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow-x: hidden !important;
+        }
+
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          33% { transform: translateY(-20px) rotate(2deg); }
+          66% { transform: translateY(10px) rotate(-2deg); }
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        /* PWA-specific styles */
+        * {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Prevent zoom on iOS */
+        input[type="email"],
+        input[type="password"],
+        input[type="text"],
+        input[type="tel"],
+        input[type="date"],
+        input[type="number"],
+        textarea {
+          font-size: 16px !important;
+        }
+
+        /* PWA-style scrolling */
+        * {
+          -webkit-overflow-scrolling: touch;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+          background: rgba(0, 245, 255, 0.3);
+          border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 245, 255, 0.5);
+        }
+
+        @media (max-width: 768px) {
+          .homepage-container {
+            padding: 16px !important;
           }
           
-          html {
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow-x: hidden !important;
+          .content-wrapper {
+            border-radius: 16px !important;
           }
           
-          body {
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow-x: hidden !important;
-          }
-          
-          #root {
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow-x: hidden !important;
-          }
-
-          @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            33% { transform: translateY(-25px) rotate(3deg); }
-            66% { transform: translateY(15px) rotate(-3deg); }
-          }
-
-          /* PWA-specific styles */
-          * {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-          }
-
-          /* PWA-style scrolling */
-          * {
-            -webkit-overflow-scrolling: touch;
-          }
-
-          /* Responsive adjustments */
-          @media (max-width: 768px) {
-            .homepage-container {
-              padding: 0 1rem !important;
-              padding-top: env(safe-area-inset-top, 20px) !important;
-              padding-bottom: env(safe-area-inset-bottom, 20px) !important;
-            }
-            
-            .content-wrapper {
-              border-radius: 20px !important;
-              margin: 0.5rem !important;
-            }
-          }
-
-          @media (max-width: 480px) {
-            .content-section {
-              padding: 1rem !important;
-            }
-          }
-
-          /* PWA display modes */
-          @media (display-mode: standalone) {
-            .homepage-container {
-              padding-top: calc(env(safe-area-inset-top, 20px) + 20px);
-            }
-          }
-
-          /* Accessibility */
-          @media (prefers-reduced-motion: reduce) {
-            * {
-              animation-duration: 0.01ms !important;
-              animation-iteration-count: 1 !important;
-              transition-duration: 0.01ms !important;
-            }
-          }
-
-          @media (prefers-contrast: high) {
-            .content-wrapper {
-              border: 2px solid rgba(255, 255, 255, 0.3) !important;
-            }
-          }
-
-          /* Smooth transitions for components */
-          .header-section,
           .content-section {
-            transition: all 0.3s ease;
+            padding: 20px !important;
+            gap: 20px !important;
           }
+          
+          .section-block {
+            padding: 20px !important;
+          }
+        }
 
-          /* Custom scrollbar for dark theme */
-          ::-webkit-scrollbar {
-            width: 8px;
+        @media (max-width: 480px) {
+          .homepage-container {
+            padding: 12px !important;
           }
+          
+          .content-section {
+            padding: 16px !important;
+            gap: 16px !important;
+          }
+          
+          .section-block {
+            padding: 16px !important;
+          }
+        }
 
-          ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
+        /* Support for PWA display modes */
+        @media (display-mode: standalone) {
+          .homepage-container {
+            padding-top: calc(env(safe-area-inset-top, 20px) + 20px) !important;
           }
+        }
 
-          ::-webkit-scrollbar-thumb {
-            background: rgba(0, 245, 255, 0.3);
-            border-radius: 4px;
+        /* Reduce motion for accessibility */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
           }
+        }
 
-          ::-webkit-scrollbar-thumb:hover {
-            background: rgba(0, 245, 255, 0.5);
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+          .content-wrapper {
+            border: 2px solid rgba(255, 255, 255, 0.3) !important;
           }
-        `}
+        }
+      `}
       </style>
+    ),
+    []
+  );
 
-      {/* Main Content Wrapper */}
-      <div style={styles.contentWrapper} className="content-wrapper">
-        {/* Network Status Indicator */}
-        <div style={styles.networkIndicator} title="Online"></div>
+  return (
+    <>
+      {GlobalStyles}
+      <div style={styles.container} className="homepage-container">
+        {FloatingElements}
 
-        {/* Header Section */}
-        <div style={styles.headerSection} className="header-section">
-          <Header user={user} />
-        </div>
-
-        {/* Content Section */}
-        <div style={styles.contentSection} className="content-section">
-          {/* Group 2: My Financial Summary - summary prop eklendi */}
-          <div style={styles.sectionBlock}>
-            <FinancialSummary
-              user={user}
-              events={events}
-              expenses={expenses}
-              summary={summary}
+        <div style={styles.mainContainer}>
+          <div style={styles.contentWrapper} className="content-wrapper">
+            <div
+              style={styles.networkIndicator}
+              title={isOnline ? 'Online' : 'Offline'}
             />
-          </div>
 
-          {/* Group 3: Fun Personal Stats */}
-          <div style={styles.sectionBlock}>
-            <PersonalStats user={user} events={events} expenses={expenses} />
+            <div style={styles.headerSection}>
+              <Header user={user} />
+            </div>
+
+            <div style={styles.contentSection} className="content-section">
+              <div style={styles.sectionBlock} className="section-block">
+                {/* Summary prop kaldırıldı - artık gerekmiyor */}
+                <FinancialSummary
+                  user={user}
+                  events={events}
+                  expenses={expenses}
+                />
+              </div>
+
+              <div style={styles.sectionBlock} className="section-block">
+                <PersonalStats
+                  user={user}
+                  events={events}
+                  expenses={expenses}
+                />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Bottom Navigation (fixed) */}
-      <BottomNavigation />
-    </div>
+        <BottomNavigation />
+      </div>
+    </>
   );
 };
 

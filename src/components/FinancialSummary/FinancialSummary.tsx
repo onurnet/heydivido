@@ -1,206 +1,139 @@
 // src/components/FinancialSummary/FinancialSummary.tsx
-import React, { useMemo, useEffect } from 'react';
-import type { User, Event, Expense, Summary } from '../../types/types';
+import React, { useMemo, useEffect, useState } from 'react';
+import { supabase } from '../../supabaseClient';
+import type { User, Event, Expense } from '../../types/types';
 
 interface FinancialSummaryProps {
   user: User;
   events: Event[];
   expenses: Expense[];
-  summary: Summary;
-}
-
-interface CurrencyAmount {
-  [currency: string]: number;
 }
 
 const FinancialSummary: React.FC<FinancialSummaryProps> = ({
   user,
   events,
-  expenses,
-  summary
+  expenses
 }) => {
-  // Debug: FinancialSummary props'larını kontrol et
+  const [eventParticipants, setEventParticipants] = useState<
+    { event_id: string; user_id: string }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch event_participants data
   useEffect(() => {
-    console.log('🔍 FinancialSummary received props:', {
-      user: user?.id,
-      summary,
-      eventsCount: events.length,
-      expensesCount: expenses.length
-    });
-    console.log(
-      '🔍 FinancialSummary summary.total_expenses:',
-      summary.total_expenses,
-      typeof summary.total_expenses
-    );
-  }, [user, summary, events, expenses]);
+    const fetchEventParticipants = async () => {
+      if (!user?.id && !user?.real_id) return;
 
-  const { myExpenses, expectedPayments } = useMemo(() => {
-    // Filter active events
-    const activeEvents = events.filter(
-      (event) => event.status === 'active' || !event.hasOwnProperty('status')
-    );
-    const activeEventIds = new Set(activeEvents.map((event) => event.id));
+      try {
+        console.log(
+          '🔍 Fetching event_participants for user:',
+          user.id,
+          user.real_id
+        );
 
-    // Calculate my expenses in active events
-    const myExpenses: CurrencyAmount = {};
-    expenses
-      .filter(
-        (expense) =>
-          activeEventIds.has(expense.event_id || expense.eventId) &&
-          (expense.paid_by === user.id || expense.paid_by === user.real_id)
-      )
-      .forEach((expense) => {
-        const amount =
-          typeof expense.amount === 'string'
-            ? parseFloat(expense.amount)
-            : expense.amount || 0;
+        const { data, error } = await supabase
+          .from('event_participants')
+          .select('event_id, user_id')
+          .or(`user_id.eq.${user.id},user_id.eq.${user.real_id || user.id}`);
 
-        myExpenses[expense.currency] =
-          (myExpenses[expense.currency] || 0) + amount;
-      });
-
-    // Calculate expected payments (money others owe me)
-    const expectedPayments: CurrencyAmount = {};
-    expenses
-      .filter(
-        (expense) =>
-          activeEventIds.has(expense.event_id || expense.eventId) &&
-          (expense.paid_by === user.id || expense.paid_by === user.real_id) &&
-          expense.splits &&
-          expense.splits.length > 1
-      )
-      .forEach((expense) => {
-        const myShare =
-          expense.splits?.find((split) => split.userId === user.id)?.amount ||
-          0;
-        const amount =
-          typeof expense.amount === 'string'
-            ? parseFloat(expense.amount)
-            : expense.amount || 0;
-        const othersOweMeTotal = amount - myShare;
-
-        if (othersOweMeTotal > 0) {
-          expectedPayments[expense.currency] =
-            (expectedPayments[expense.currency] || 0) + othersOweMeTotal;
+        if (error) {
+          console.error('❌ Error fetching event_participants:', error);
+          setEventParticipants([]);
+        } else {
+          console.log('✅ Event participants loaded:', data);
+          setEventParticipants(data || []);
         }
-      });
+      } catch (err) {
+        console.error('❌ Unexpected error in fetchEventParticipants:', err);
+        setEventParticipants([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    console.log('🔍 FinancialSummary calculated:', {
-      myExpenses,
-      expectedPayments
+    fetchEventParticipants();
+  }, [user?.id, user?.real_id]);
+
+  useEffect(() => {
+    console.log('🔍 FinancialSummary props:', {
+      userId: user?.id,
+      eventsCount: events?.length,
+      expensesCount: expenses?.length,
+      eventParticipantsCount: eventParticipants?.length
+    });
+  }, [user, events, expenses, eventParticipants]);
+
+  const { activeEventsCount, expectedPayments } = useMemo(() => {
+    if (!user || !events || !expenses || loading) {
+      return {
+        activeEventsCount: 0,
+        expectedPayments: 0
+      };
+    }
+
+    // 1. Açık Etkinliklerim: event_participants tablosundan user'ın katıldığı active events
+    const myEventIds = new Set(
+      eventParticipants
+        .filter((ep) => ep.user_id === user.id || ep.user_id === user.real_id)
+        .map((ep) => ep.event_id)
+    );
+
+    console.log(
+      '🔍 My event IDs from event_participants:',
+      Array.from(myEventIds)
+    );
+
+    const myActiveEvents = events.filter((event) => {
+      const isActive = event.status === 'active';
+      const isParticipant = myEventIds.has(event.id);
+
+      console.log(
+        `🔍 Event ${event.id} (${event.name}): active=${isActive}, participant=${isParticipant}`
+      );
+
+      return isActive && isParticipant;
     });
 
-    return { myExpenses, expectedPayments };
-  }, [user.id, user.real_id, events, expenses]);
+    const activeEventsCount = myActiveEvents.length;
+    const activeEventIds = new Set(myActiveEvents.map((e) => e.id));
 
-  // App.tsx'den gelen summary'yi kullan
-  const totalExpensesFromSummary = summary.total_expenses || 0;
+    // 2. Beklediğim Ödemeler: active etkinliklerde benim ödediğim harcamalarda,
+    //    diğerlerinin bana olan borçları
+    let expectedPayments = 0;
 
-  const styles = {
-    container: {
-      width: '100%'
-    },
+    for (const expense of expenses) {
+      // Sadece active etkinliklerdeki harcamalar
+      if (!activeEventIds.has(expense.event_id)) continue;
 
-    title: {
-      fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
-      fontWeight: '600',
-      color: '#ffffff',
-      marginBottom: 'clamp(16px, 3vw, 20px)',
-      textAlign: 'center' as const
-    },
+      // Sadece benim ödediğim harcamalar
+      const isPaidByMe =
+        expense.paid_by === user.id || expense.paid_by === user.real_id;
+      if (!isPaidByMe) continue;
 
-    // Summary kartı
-    summaryCard: {
-      background: 'rgba(0, 245, 255, 0.1)',
-      borderRadius: '12px',
-      padding: 'clamp(16px, 3vw, 20px)',
-      border: '1px solid rgba(0, 245, 255, 0.2)',
-      marginBottom: 'clamp(16px, 3vw, 20px)',
-      textAlign: 'center' as const
-    },
+      // Splits varsa, diğerlerinin paylarını topla
+      if (expense.splits && expense.splits.length > 0) {
+        const othersShare = expense.splits
+          .filter(
+            (split) => split.userId !== user.id && split.userId !== user.real_id
+          )
+          .reduce((sum, split) => sum + (split.amount || 0), 0);
 
-    summaryTitle: {
-      fontSize: 'clamp(1rem, 2.5vw, 1.125rem)',
-      fontWeight: '500',
-      color: '#00f5ff',
-      marginBottom: 'clamp(8px, 1.5vw, 12px)'
-    },
-
-    summaryAmount: {
-      fontSize: 'clamp(1.5rem, 4vw, 2rem)',
-      fontWeight: '700',
-      color: '#ffffff'
-    },
-
-    grid: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: 'clamp(16px, 3vw, 24px)',
-      '@media (max-width: 640px)': {
-        gridTemplateColumns: '1fr',
-        gap: 'clamp(12px, 2vw, 16px)'
-      }
-    },
-
-    column: {
-      background: 'rgba(255, 255, 255, 0.03)',
-      borderRadius: '12px',
-      padding: 'clamp(16px, 3vw, 20px)',
-      border: '1px solid rgba(255, 255, 255, 0.08)',
-      backdropFilter: 'blur(5px)'
-    },
-
-    columnTitle: {
-      fontSize: 'clamp(1rem, 2.5vw, 1.125rem)',
-      fontWeight: '500',
-      color: '#00f5ff',
-      marginBottom: 'clamp(12px, 2vw, 16px)',
-      textAlign: 'center' as const
-    },
-
-    currencyList: {
-      display: 'flex',
-      flexDirection: 'column' as const,
-      gap: 'clamp(8px, 1.5vw, 12px)'
-    },
-
-    currencyItem: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 'clamp(8px, 1.5vw, 12px)',
-      background: 'rgba(255, 255, 255, 0.02)',
-      borderRadius: '8px',
-      border: '1px solid rgba(255, 255, 255, 0.05)'
-    },
-
-    currency: {
-      fontSize: 'clamp(0.875rem, 2vw, 1rem)',
-      fontWeight: '500',
-      color: '#e2e8f0'
-    },
-
-    amount: {
-      fontSize: 'clamp(0.875rem, 2vw, 1rem)',
-      fontWeight: '600',
-      color: '#ffffff'
-    },
-
-    emptyState: {
-      textAlign: 'center' as const,
-      color: '#64748b',
-      fontSize: 'clamp(0.875rem, 2vw, 1rem)',
-      fontStyle: 'italic',
-      padding: 'clamp(16px, 3vw, 20px)'
-    },
-
-    // Mobile-specific styles
-    mobileGrid: {
-      '@media (max-width: 640px)': {
-        gridTemplateColumns: '1fr'
+        expectedPayments += othersShare;
       }
     }
-  };
+
+    console.log('🔍 Calculated:', {
+      activeEventsCount,
+      expectedPayments,
+      myActiveEvents: myActiveEvents.map((e) => ({ id: e.id, name: e.name })),
+      myEventIds: Array.from(myEventIds)
+    });
+
+    return {
+      activeEventsCount,
+      expectedPayments
+    };
+  }, [user, events, expenses, eventParticipants, loading]);
 
   const formatAmount = (amount: number): string => {
     const validAmount =
@@ -211,60 +144,174 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
     }).format(validAmount);
   };
 
-  const renderCurrencyList = (
-    amounts: CurrencyAmount,
-    type: 'expense' | 'payment'
-  ) => {
-    const entries = Object.entries(amounts);
+  const styles: { [key: string]: React.CSSProperties } = {
+    container: {
+      width: '100%'
+    },
 
-    if (entries.length === 0) {
-      return (
-        <div style={styles.emptyState}>
-          {type === 'expense'
-            ? 'Henüz aktif bir harcama yok'
-            : 'Beklenen ödeme yok'}
-        </div>
-      );
+    title: {
+      fontSize: 'clamp(1.25rem, 3vw, 1.5rem)',
+      fontWeight: 600,
+      color: '#ffffff',
+      marginBottom: 'clamp(20px, 4vw, 32px)',
+      textAlign: 'center',
+      background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text'
+    },
+
+    grid: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 'clamp(16px, 3vw, 24px)'
+    },
+
+    card: {
+      background: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: '16px',
+      padding: 'clamp(20px, 4vw, 32px)',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      backdropFilter: 'blur(10px)',
+      textAlign: 'center',
+      transition: 'all 0.3s ease',
+      position: 'relative',
+      overflow: 'hidden'
+    },
+
+    cardIcon: {
+      fontSize: 'clamp(2rem, 5vw, 3rem)',
+      marginBottom: 'clamp(12px, 2vw, 16px)',
+      display: 'block'
+    },
+
+    cardTitle: {
+      fontSize: 'clamp(1rem, 2.5vw, 1.25rem)',
+      fontWeight: 600,
+      color: '#00f5ff',
+      marginBottom: 'clamp(8px, 1.5vw, 12px)'
+    },
+
+    cardValue: {
+      fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+      fontWeight: 700,
+      color: '#ffffff',
+      marginBottom: 'clamp(4px, 1vw, 8px)'
+    },
+
+    cardSubtext: {
+      fontSize: 'clamp(0.875rem, 2vw, 1rem)',
+      color: 'rgba(255, 255, 255, 0.7)',
+      fontWeight: 400
+    },
+
+    // Hover efektleri için
+    cardHover: {
+      background: 'rgba(255, 255, 255, 0.08)',
+      transform: 'translateY(-2px)',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+    },
+
+    // Gradient overlay for cards
+    cardOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background:
+        'linear-gradient(135deg, rgba(0, 245, 255, 0.1) 0%, rgba(255, 0, 110, 0.1) 100%)',
+      opacity: 0,
+      transition: 'opacity 0.3s ease',
+      pointerEvents: 'none'
+    },
+
+    // Loading state
+    loadingCard: {
+      opacity: 0.6,
+      pointerEvents: 'none'
     }
+  };
 
-    return (
-      <div style={styles.currencyList}>
-        {entries.map(([currency, amount]) => (
-          <div key={currency} style={styles.currencyItem}>
-            <span style={styles.currency}>{currency}</span>
-            <span style={styles.amount}>{formatAmount(amount)}</span>
-          </div>
-        ))}
-      </div>
-    );
+  const handleCardHover = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (loading) return;
+
+    const card = e.currentTarget;
+    const overlay = card.querySelector('.card-overlay') as HTMLElement;
+
+    Object.assign(card.style, styles.cardHover);
+    if (overlay) {
+      overlay.style.opacity = '1';
+    }
+  };
+
+  const handleCardLeave = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (loading) return;
+
+    const card = e.currentTarget;
+    const overlay = card.querySelector('.card-overlay') as HTMLElement;
+
+    card.style.background = 'rgba(255, 255, 255, 0.05)';
+    card.style.transform = 'translateY(0)';
+    card.style.boxShadow = 'none';
+    if (overlay) {
+      overlay.style.opacity = '0';
+    }
   };
 
   return (
     <div style={styles.container}>
       <h3 style={styles.title}>💰 Mali Durumum</h3>
 
-      {/* App.tsx'den gelen toplam expense'i göster */}
-      <div style={styles.summaryCard}>
-        <div style={styles.summaryTitle}>Toplam Harcamalarım</div>
-        <div style={styles.summaryAmount}>
-          {formatAmount(totalExpensesFromSummary)} TL
+      <div style={styles.grid} className="financial-grid">
+        {/* Açık Etkinliklerim Kartı */}
+        <div
+          style={{
+            ...styles.card,
+            ...(loading ? styles.loadingCard : {})
+          }}
+          onMouseEnter={handleCardHover}
+          onMouseLeave={handleCardLeave}
+        >
+          <div className="card-overlay" style={styles.cardOverlay}></div>
+          <span style={styles.cardIcon}>🎒</span>
+          <h4 style={styles.cardTitle}>Açık Etkinliklerim</h4>
+          <div style={styles.cardValue}>
+            {loading ? '...' : activeEventsCount}
+          </div>
+          <div style={styles.cardSubtext}>
+            {loading
+              ? 'Yükleniyor...'
+              : activeEventsCount === 0
+              ? 'Henüz aktif etkinlik yok'
+              : activeEventsCount === 1
+              ? 'aktif etkinlik'
+              : 'aktif etkinlik'}
+          </div>
         </div>
-      </div>
 
-      <div
-        style={{ ...styles.grid, ...styles.mobileGrid }}
-        className="financial-grid"
-      >
-        {/* Left Column: My Expenses */}
-        <div style={styles.column}>
-          <h4 style={styles.columnTitle}>Toplam Aktif Harcamalarım</h4>
-          {renderCurrencyList(myExpenses, 'expense')}
-        </div>
-
-        {/* Right Column: Expected Payments */}
-        <div style={styles.column}>
-          <h4 style={styles.columnTitle}>Beklediğim Ödemeler</h4>
-          {renderCurrencyList(expectedPayments, 'payment')}
+        {/* Beklediğim Ödemeler Kartı */}
+        <div
+          style={{
+            ...styles.card,
+            ...(loading ? styles.loadingCard : {})
+          }}
+          onMouseEnter={handleCardHover}
+          onMouseLeave={handleCardLeave}
+        >
+          <div className="card-overlay" style={styles.cardOverlay}></div>
+          <span style={styles.cardIcon}>💸</span>
+          <h4 style={styles.cardTitle}>Beklediğim Ödemeler</h4>
+          <div style={styles.cardValue}>
+            {loading ? '...' : formatAmount(expectedPayments)}
+          </div>
+          <div style={styles.cardSubtext}>
+            {loading
+              ? 'Hesaplanıyor...'
+              : expectedPayments === 0
+              ? 'Bekleyen ödeme yok'
+              : 'TL alacağım'}
+          </div>
         </div>
       </div>
 
@@ -274,6 +321,26 @@ const FinancialSummary: React.FC<FinancialSummaryProps> = ({
             .financial-grid {
               grid-template-columns: 1fr !important;
               gap: 1rem !important;
+            }
+          }
+
+          @media (max-width: 480px) {
+            .financial-grid {
+              gap: 0.75rem !important;
+            }
+          }
+
+          /* Accessibility improvements */
+          @media (prefers-reduced-motion: reduce) {
+            .financial-grid > div {
+              transition: none !important;
+            }
+          }
+
+          /* High contrast support */
+          @media (prefers-contrast: high) {
+            .financial-grid > div {
+              border: 2px solid rgba(255, 255, 255, 0.3) !important;
             }
           }
         `}
