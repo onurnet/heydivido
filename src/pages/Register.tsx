@@ -19,6 +19,9 @@ const Register: React.FC = () => {
   const [invitationInfo, setInvitationInfo] = React.useState<any>(null);
   const [loadingInvite, setLoadingInvite] = React.useState(true);
 
+  // ✅ YENİ STATE - Custom dropdown için
+  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+
   // Small delay function
   const sleep = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
@@ -129,6 +132,23 @@ const Register: React.FC = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // ✅ YENİ useEffect - Dropdown'ı kapatmak için click outside listener
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isDropdownOpen) {
+        const dropdown = document.getElementById('language-dropdown');
+        if (dropdown && !dropdown.contains(event.target as Node)) {
+          setIsDropdownOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -266,6 +286,17 @@ const Register: React.FC = () => {
 
   const handleBackToHome = () => {
     window.location.href = '/';
+  };
+
+  // ✅ YENİ FONKSİYON - Language seçimi
+  const handleLanguageSelect = (language: string) => {
+    setPreferredLanguage(language);
+    setIsDropdownOpen(false);
+  };
+
+  // ✅ YENİ FONKSİYON - Language label'ı al
+  const getLanguageLabel = (language: string) => {
+    return language === 'en' ? t('language_english') : t('language_turkish');
   };
 
   const isFormValid =
@@ -410,7 +441,13 @@ const Register: React.FC = () => {
       WebkitTapHighlightColor: 'transparent'
     },
 
-    select: {
+    // ✅ YENİ STYLES - Custom Dropdown
+    dropdownContainer: {
+      position: 'relative' as const,
+      width: '100%'
+    },
+
+    dropdownButton: {
       width: '100%',
       padding: '1rem',
       minHeight: '44px',
@@ -423,21 +460,54 @@ const Register: React.FC = () => {
       transition: 'all 0.3s ease',
       outline: 'none',
       boxSizing: 'border-box' as const,
-      WebkitAppearance: 'none' as const,
-      WebkitTapHighlightColor: 'transparent',
       cursor: 'pointer',
-      backgroundImage:
-        "url(\"data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e\")",
-      backgroundRepeat: 'no-repeat',
-      backgroundPosition: 'right 1rem center',
-      backgroundSize: '16px',
-      paddingRight: '3rem'
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      userSelect: 'none' as const,
+      WebkitTapHighlightColor: 'transparent'
     },
 
-    selectOption: {
-      background: '#1a1a2e',
+    dropdownArrow: {
+      width: '16px',
+      height: '16px',
+      color: 'rgba(255, 255, 255, 0.7)',
+      transition: 'transform 0.3s ease',
+      transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+    },
+
+    dropdownMenu: {
+      position: 'absolute' as const,
+      top: '100%',
+      left: '0',
+      right: '0',
+      background: 'rgba(26, 26, 46, 0.95)',
+      backdropFilter: 'blur(20px)',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRadius: '12px',
+      marginTop: '4px',
+      zIndex: 1000,
+      overflow: 'hidden',
+      boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+      animation: 'dropdownSlide 0.2s ease-out'
+    },
+
+    dropdownOption: {
+      padding: '12px 16px',
       color: 'white',
-      padding: '0.5rem'
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      fontSize: '16px',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+    },
+
+    dropdownOptionLast: {
+      borderBottom: 'none'
+    },
+
+    dropdownOptionHover: {
+      background: 'rgba(0, 245, 255, 0.1)',
+      color: '#00f5ff'
     },
 
     inputFocus: {
@@ -549,31 +619,44 @@ const Register: React.FC = () => {
       boxShadow: `0 0 10px ${isOnline ? '#4CAF50' : '#f44336'}`
     },
 
+    // ✅ GÜNCEL STYLES - Login Link Section
     loginLink: {
       textAlign: 'center' as const,
-      marginTop: '1.5rem',
-      padding: '1rem',
+      marginTop: '2rem',
+      padding: '1.5rem 1rem 0.5rem 1rem',
       borderTop: '1px solid rgba(255, 255, 255, 0.1)'
     },
 
     loginLinkText: {
-      color: '#b0b0b0',
+      color: 'rgba(255, 255, 255, 0.7)',
       fontSize: '14px',
-      marginBottom: '0.5rem'
+      marginBottom: '12px',
+      fontWeight: '400'
     },
 
     loginLinkButton: {
       background: 'transparent',
       border: '1px solid rgba(0, 245, 255, 0.3)',
-      borderRadius: '8px',
-      padding: '8px 16px',
+      borderRadius: '10px',
+      padding: '12px 24px',
       color: '#00f5ff',
       fontSize: '14px',
+      fontWeight: '600',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
       textDecoration: 'none',
       userSelect: 'none' as const,
-      WebkitTapHighlightColor: 'transparent'
+      WebkitTapHighlightColor: 'transparent',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px'
+    },
+
+    loginLinkButtonHover: {
+      background: 'rgba(0, 245, 255, 0.1)',
+      borderColor: '#00f5ff',
+      transform: 'translateY(-1px)',
+      boxShadow: '0 4px 12px rgba(0, 245, 255, 0.2)'
     }
   };
 
@@ -683,6 +766,17 @@ const Register: React.FC = () => {
             to {
               transform: translateX(-50%) translateY(0);
               opacity: 1;
+            }
+          }
+
+          @keyframes dropdownSlide {
+            from {
+              opacity: 0;
+              transform: translateY(-8px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
             }
           }
 
@@ -859,25 +953,95 @@ const Register: React.FC = () => {
             />
           </div>
 
+          {/* ✅ YENİ - Custom Language Dropdown */}
           <div style={styles.inputGroup}>
-            <select
-              value={preferredLanguage}
-              onChange={(e) => setPreferredLanguage(e.target.value)}
-              style={styles.select}
-              onFocus={(e) => {
-                Object.assign(e.target.style, styles.inputFocus);
-              }}
-              onBlur={(e) => {
-                Object.assign(e.target.style, styles.select);
-              }}
-            >
-              <option value="en" style={styles.selectOption}>
-                {t('language_english')}
-              </option>
-              <option value="tr" style={styles.selectOption}>
-                {t('language_turkish')}
-              </option>
-            </select>
+            <div style={styles.dropdownContainer} id="language-dropdown">
+              <button
+                type="button"
+                style={{
+                  ...styles.dropdownButton,
+                  ...(isDropdownOpen ? styles.inputFocus : {})
+                }}
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <span>{getLanguageLabel(preferredLanguage)}</span>
+                <svg
+                  style={styles.dropdownArrow}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+
+              {isDropdownOpen && (
+                <div style={styles.dropdownMenu}>
+                  <div
+                    style={{
+                      ...styles.dropdownOption,
+                      ...(preferredLanguage === 'en'
+                        ? {
+                            background: 'rgba(0, 245, 255, 0.1)',
+                            color: '#00f5ff'
+                          }
+                        : {})
+                    }}
+                    onClick={() => handleLanguageSelect('en')}
+                    onMouseEnter={(e) => {
+                      if (preferredLanguage !== 'en') {
+                        Object.assign(
+                          e.currentTarget.style,
+                          styles.dropdownOptionHover
+                        );
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (preferredLanguage !== 'en') {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'white';
+                      }
+                    }}
+                  >
+                    {t('language_english')}
+                  </div>
+                  <div
+                    style={{
+                      ...styles.dropdownOption,
+                      ...styles.dropdownOptionLast,
+                      ...(preferredLanguage === 'tr'
+                        ? {
+                            background: 'rgba(0, 245, 255, 0.1)',
+                            color: '#00f5ff'
+                          }
+                        : {})
+                    }}
+                    onClick={() => handleLanguageSelect('tr')}
+                    onMouseEnter={(e) => {
+                      if (preferredLanguage !== 'tr') {
+                        Object.assign(
+                          e.currentTarget.style,
+                          styles.dropdownOptionHover
+                        );
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (preferredLanguage !== 'tr') {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'white';
+                      }
+                    }}
+                  >
+                    {t('language_turkish')}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {error && <div style={styles.error}>{error}</div>}
@@ -929,21 +1093,26 @@ const Register: React.FC = () => {
             )}
           </button>
 
-          {/* Login Link */}
+          {/* ✅ GÜNCEL - Login Link Section */}
           <div style={styles.loginLink}>
             <div style={styles.loginLinkText}>{t('already_have_account')}</div>
             <button
               style={styles.loginLinkButton}
               onClick={() => (window.location.href = '/login')}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 245, 255, 0.1)';
-                e.currentTarget.style.borderColor = '#00f5ff';
+                Object.assign(
+                  e.currentTarget.style,
+                  styles.loginLinkButtonHover
+                );
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
                 e.currentTarget.style.borderColor = 'rgba(0, 245, 255, 0.3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
+              <span>→</span>
               {t('sign_in_instead')}
             </button>
           </div>

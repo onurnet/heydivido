@@ -45,6 +45,53 @@ interface ExpenseData {
   created_at: string;
 }
 
+// Fetch expense participants shares
+const fetchExpenseParticipantsShares = async () => {
+  if (!expenseId) return;
+
+  try {
+    console.log(
+      `Fetching expense participants shares for expense: ${expenseId}`
+    );
+
+    const { data, error } = await supabase
+      .from('expenses_participants')
+      .select('user_id, share_amount')
+      .eq('expense_id', expenseId);
+
+    if (error) {
+      console.error('Error fetching expense participants shares:', error);
+      toast.error(t('failed_to_load_expense_participants'));
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.warn('No expense participants found');
+      setParticipants([]);
+      setParticipantShares({});
+      return;
+    }
+
+    // Build participants and participantShares
+    const loadedParticipants: string[] = [];
+    const loadedShares: { [userId: string]: number } = {};
+
+    data.forEach((row) => {
+      loadedParticipants.push(row.user_id);
+      loadedShares[row.user_id] = row.share_amount;
+    });
+
+    console.log('Loaded expense participants:', loadedParticipants);
+    console.log('Loaded participant shares:', loadedShares);
+
+    setParticipants(loadedParticipants);
+    setParticipantShares(loadedShares);
+  } catch (err) {
+    console.error('Error in fetchExpenseParticipantsShares:', err);
+    toast.error(t('failed_to_load_expense_participants'));
+  }
+};
+
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
   options,
   value,
@@ -539,21 +586,12 @@ const ExpenseEdit: React.FC = () => {
       await fetchCurrentUser();
       await fetchEventParticipants();
       await fetchExpenseData();
+      await fetchExpenseParticipantsShares();
       setLoading(false);
     };
 
     loadData();
   }, [eventId, expenseId]);
-
-  // Set default participants after participants are loaded and expense is fetched
-  useEffect(() => {
-    if (eventParticipants.length > 0 && originalExpense) {
-      // For now, set all participants as selected (equal split)
-      // In a real app, you'd fetch the actual participant shares from expense_participants table
-      const allParticipantIds = eventParticipants.map((p) => p.id);
-      setParticipants(allParticipantIds);
-    }
-  }, [eventParticipants, originalExpense]);
 
   // Calculate participant shares based on split method
   const calculateShares = (
@@ -836,14 +874,44 @@ const ExpenseEdit: React.FC = () => {
 
       console.log('Updating expense with data:', expenseData);
 
-      const { error } = await supabase
+      // 1️⃣ Update expenses table
+      const { error: expenseError } = await supabase
         .from('expenses')
         .update(expenseData)
         .eq('id', expenseId);
 
-      if (error) {
-        console.error('Error updating expense:', error);
+      if (expenseError) {
+        console.error('Error updating expense:', expenseError);
         toast.error(t('failed_update_expense'));
+        return;
+      }
+
+      // 2️⃣ Delete old participants for this expense
+      const { error: deleteError } = await supabase
+        .from('expenses_participants')
+        .delete()
+        .eq('expense_id', expenseId);
+
+      if (deleteError) {
+        console.error('Error deleting old participants:', deleteError);
+        toast.error(t('failed_update_expense_participants'));
+        return;
+      }
+
+      // 3️⃣ Insert new participants shares
+      const participantRows = participants.map((userId) => ({
+        expense_id: expenseId,
+        user_id: userId,
+        share_amount: participantShares[userId] || 0
+      }));
+
+      const { error: insertError } = await supabase
+        .from('expenses_participants')
+        .insert(participantRows);
+
+      if (insertError) {
+        console.error('Error inserting new participants:', insertError);
+        toast.error(t('failed_update_expense_participants'));
         return;
       }
 

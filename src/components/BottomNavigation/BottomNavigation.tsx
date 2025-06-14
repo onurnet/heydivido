@@ -255,10 +255,10 @@ const BottomNavigation: React.FC = () => {
         </button>
 
         <div
-          style={isActive('/expenses') ? activeNavItemStyle : navItemStyle}
-          onClick={() => handleNavigation('/expenses')}
+          style={isActive('/all-expenses') ? activeNavItemStyle : navItemStyle}
+          onClick={() => handleNavigation('/all-expenses')}
         >
-          <span style={isActive('/expenses') ? activeIconStyle : iconStyle}>
+          <span style={isActive('/all-expenses') ? activeIconStyle : iconStyle}>
             💰
           </span>
           <span>{t('nav_expenses')}</span>

@@ -22,32 +22,41 @@ import Events from './pages/Events';
 import AddExpense from './pages/AddExpense'; // ✅ AddExpense import
 import InvitePage from './pages/InvitePage';
 import ExpenseEdit from './pages/ExpenseEdit'; // ✅ ExpenseEdit import
+import SettlementPage from './pages/SettlementPage';
+import AllExpensesPage from './pages/AllExpensesPage';
 
 import { Toaster } from 'react-hot-toast';
 import { supabase } from './supabaseClient';
 
 function App() {
   React.useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('AUTH STATE CHANGE:', event, session);
-      }
-    );
-
-    return () => {
-      listener?.subscription?.unsubscribe();
-    };
-  }, []);
-
-  React.useEffect(() => {
     const checkSession = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       console.log('Session check:', sessionData);
 
+      const pathsToSkipRedirect = [
+        '/invite',
+        '/events',
+        '/login',
+        '/register',
+        '/profile'
+      ];
+
+      const currentPath = window.location.pathname;
+
+      const shouldSkipRedirect = pathsToSkipRedirect.some((path) =>
+        currentPath.startsWith(path)
+      );
+
+      // Sadece '/' ana sayfada redirect yapılacak, diğer özel sayfalarda yapılmayacak
       if (sessionData?.session?.access_token) {
-        if (window.location.pathname !== '/home') {
+        if (currentPath === '/') {
           console.log('Redirecting to /home because session is active');
           window.location.href = '/home';
+        } else if (shouldSkipRedirect) {
+          console.log(`Skipping redirect on path: ${currentPath}`);
+        } else {
+          console.log('User is already on allowed page, no redirect needed');
         }
       }
     };
@@ -116,6 +125,15 @@ function App() {
           <Route path="/events/:eventId" element={<EventDetails />} />
           <Route path="/events/:eventId/edit" element={<EventDetailsEdit />} />
           <Route path="/invite/:token" element={<InvitePage />} />
+          <Route path="/all-expenses" element={<AllExpensesPage />} />
+          <Route
+            path="/events/:eventId/settlement"
+            element={<SettlementPage />}
+          />
+          <Route
+            path="/events/:eventId/settlements"
+            element={<SettlementPage />}
+          />
           <Route
             path="/events/:eventId/expenses/:expenseId/edit"
             element={<ExpenseEdit />}

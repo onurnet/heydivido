@@ -183,7 +183,7 @@ const AddEvent: React.FC = () => {
   const [name, setName] = useState('');
   const [eventCategory, setEventCategory] = useState('');
   const [description, setDescription] = useState('');
-  const [defaultCurrency, setDefaultCurrency] = useState('EUR');
+  const [defaultCurrency, setDefaultCurrency] = useState('TRY');
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
   const [plannedStartDate, setPlannedStartDate] = useState('');
@@ -196,10 +196,10 @@ const AddEvent: React.FC = () => {
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
 
   const currencies = [
+    { code: 'TRY', name: 'Turkish Lira (TRY)' },
     { code: 'EUR', name: 'Euro (EUR)' },
     { code: 'USD', name: 'US Dollar (USD)' },
-    { code: 'GBP', name: 'British Pound (GBP)' },
-    { code: 'TRY', name: 'Turkish Lira (TRY)' }
+    { code: 'GBP', name: 'British Pound (GBP)' }
   ];
 
   const eventCategories = [

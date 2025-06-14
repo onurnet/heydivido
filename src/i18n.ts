@@ -32,6 +32,9 @@ const resources = {
       login_error: 'Error',
       back_to_home: 'Back',
       welcome_back: 'Welcome Back',
+      remember_me: 'Remember Me',
+      login_successfull: 'Login Successful',
+      forgot_password: 'Forgot Password',
 
       // REGISTER PAGE STRINGS
       register_title: 'Register',
@@ -63,6 +66,8 @@ const resources = {
       preferred_language_label: 'Preferred Language',
       language_english: 'English',
       language_turkish: 'Turkish',
+      dont_have_account: "Don't Have Account?",
+      register_instead: 'Register Instead',
 
       // PROFILE PAGE STRINGS
       logout_button: 'Logout',
@@ -97,6 +102,9 @@ const resources = {
       days: 'Days',
       my_events_title: 'My Events',
       events_you_participate_in: 'Events you participate in',
+      show_passive_events: 'Show passive events',
+      no_events_participated: 'No events participated',
+      create_first_event: 'Create First Event',
 
       //  EVENT DETAIL STRINGS
       event_details_title: 'Event Details',
@@ -144,6 +152,8 @@ const resources = {
       role_member: 'Member',
       event_description_label: 'Event Description',
       event_description_placeholder: 'Describe your event...',
+      confirm_delete_event_title: 'Confirm Delete?',
+      confirm_make_passive_title: 'Confirm Passive?',
 
       // Invite system
       youre_invited: "You're Invited!",
@@ -223,6 +233,40 @@ const resources = {
       edit_expense: 'Edit Expense',
       update_expense: 'Update Expense',
       delete_expense: 'Delete Expense',
+
+      //EXPENSES STRINGS
+      all_expenses_title: 'All Expenses',
+      expenses_found: 'expenses found',
+      showing_last_20_expenses: 'Showing only the last 20 expenses',
+      no_expenses_found: 'No expenses found yet',
+      loading_expenses: 'Loading expenses...',
+      passive: 'Passive',
+      active: 'Active',
+      authentication_error: 'Authentication error',
+      failed_load_expenses: 'Failed to load expenses',
+      unexpected_error: 'Unexpected error',
+
+      //  SETTLEMENT STRINGS
+      settlement_summary: 'Settlement Summary',
+      your_transactions: 'Your Transactions',
+      you_pay_to: 'You pay to {{name}}',
+      you_receive_from: 'You receive from {{name}}',
+      no_personal_transactions: 'You have no personal transactions.',
+      other_transactions: 'Other Transactions',
+      no_other_transactions: 'No transactions between other participants.',
+      settlements_label: 'Settlements',
+      view_settlements: 'View Settlements',
+      settlements_label: 'Settlements',
+      settlement_summary: 'Settlement Summary',
+      your_transactions: 'Your Transactions',
+      other_transactions: 'Other Transactions',
+      no_personal_transactions: 'You have no personal transactions',
+      no_other_transactions: 'No transactions between other participants',
+      you_pay_to: 'You pay to {{name}}',
+      you_receive_from: 'You receive from {{name}}',
+      calculating_settlements: 'Calculating settlements',
+      failed_load_settlements: 'Failed to load settlements',
+      back: 'Back',
 
       // LANDING PAGE STRINGS
       hero: {
@@ -406,6 +450,11 @@ const resources = {
       login_error: 'Hata',
       back_to_home: 'Geri',
       welcome_back: 'Tekrar hoşgeldiniz',
+      remember_me: 'Beni Hatırla',
+      login_successfull: 'Giriş Başarılı',
+      forgot_password: 'Şifremi Unuttum',
+      dont_have_account: 'Hesabınız Yok Mu?',
+      register_instead: 'Hemen Kayıt Olun',
 
       // REGISTER PAGE STRINGS
       register_title: 'Kayıt Ol',
@@ -455,7 +504,7 @@ const resources = {
       event_created_successfully: 'Etkinlik başarıyla oluşturuldu',
       failed_create_event: 'Etkinlik oluşturulamadı',
       fill_required_fields: 'Lütfen gerekli tüm alanları doldurun',
-      default_currency_label: 'Etkinlik Para Birimi',
+      default_currency_label: 'Harcama Para Birimi',
       event_category_label: 'Etkinlik Kategorisi',
       event_category_option_long_vacation: 'Uzun Tatil',
       event_category_option_short_trip: 'Kısa Seyahat',
@@ -472,6 +521,9 @@ const resources = {
       no_expenses_yet: 'Henüz Bir Harcama Yok',
       my_events_title: 'Etkinliklerim',
       events_you_participate_in: 'Katılımcısı olduğunuz etkinlikler',
+      show_passive_events: 'Pasif etkinlikleri göster',
+      no_events_participated: 'Hiç etkinlik yok',
+      create_first_event: 'İlk etkinliği yarat',
 
       //  EVENT DETAIL STRINGS
       event_details_title: 'Etkinlik Detayları',
@@ -490,6 +542,8 @@ const resources = {
       close: 'Kapat',
       no_email: 'Email adresi yok',
       loading_participants: 'Katılımcılar yükleniyor...',
+      confirm_delete_event_title: 'Etkinliği Sil?',
+      confirm_make_passive_title: 'Etkinliği Pasife Al?',
 
       //  EVENT DETAIL EDIT STRINGS
       only_admin_can_edit: 'Sadece yöneticiler bu etkinliği düzenleyebilir',
@@ -599,6 +653,40 @@ const resources = {
       edit_expense: 'Harcamayı Düzenle',
       update_expense: 'Harcamayı Güncelle',
       delete_expense: 'Harcamayı Sil',
+
+      //EXPENSES STRINGS
+      all_expenses_title: 'Tüm Harcamalar',
+      expenses_found: 'harcama bulundu',
+      showing_last_20_expenses: 'Sadece son 20 harcama görüntülenmektedir',
+      no_expenses_found: 'Henüz harcama bulunamadı',
+      loading_expenses: 'Harcamalar yükleniyor...',
+      passive: 'Pasif',
+      active: 'Aktif',
+      authentication_error: 'Kimlik doğrulama hatası',
+      failed_load_expenses: 'Harcamalar yüklenemedi',
+      unexpected_error: 'Beklenmeyen hata',
+
+      //  SETTLEMENT STRINGS
+      settlement_summary: 'Hesaplaşma Özeti',
+      your_transactions: 'Senin İşlemlerin',
+      you_pay_to: '{{name}} kişisine ödeme yapacaksın',
+      you_receive_from: '{{name}} kişisinden ödeme alacaksın',
+      no_personal_transactions: 'Kişisel işleminiz yok.',
+      other_transactions: 'Diğer İşlemler',
+      no_other_transactions: 'Diğer katılımcılar arasında işlem yok.',
+      settlements_label: 'Ödemeler',
+      view_settlements: 'Ödemeleri Gör',
+      settlements_label: 'Ödemeler',
+      settlement_summary: 'Ödeme Özeti',
+      your_transactions: 'Senin İşlemlerin',
+      other_transactions: 'Diğer İşlemler',
+      no_personal_transactions: 'Henüz bir ödemen yok',
+      no_other_transactions: 'Başka işlem yok',
+      you_pay_to: '{{name}} kişisine ödeyeceksin',
+      you_receive_from: '{{name}} kişisinden alacaksın',
+      calculating_settlements: 'Hesaplar hesaplanıyor',
+      failed_load_settlements: 'Hesaplar yüklenemedi',
+      back: 'Geri',
 
       // LANDING PAGE STRINGS
       hero: {

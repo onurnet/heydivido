@@ -16,6 +16,7 @@ interface Event {
   planned_start_date: string | null;
   planned_duration_days: number | null;
   created_at: string;
+  status: 'active' | 'passive' | 'deleted';
 }
 
 interface EventParticipant {
@@ -34,6 +35,9 @@ const Events: React.FC = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showOfflineMessage, setShowOfflineMessage] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // ✅ Filter state for passive events
+  const [showPassiveEvents, setShowPassiveEvents] = useState(false);
 
   // network monitoring
   useEffect(() => {
@@ -61,6 +65,13 @@ const Events: React.FC = () => {
   useEffect(() => {
     checkUserAndLoadEvents();
   }, []);
+
+  // ✅ Reload events when filter changes
+  useEffect(() => {
+    if (currentUser) {
+      loadUserEvents(currentUser.id);
+    }
+  }, [showPassiveEvents]);
 
   const checkUserAndLoadEvents = async () => {
     try {
@@ -90,9 +101,14 @@ const Events: React.FC = () => {
     }
   };
 
-  // ✅ Sadece kullanıcının katıldığı etkinlikleri yükle
+  // ✅ Updated to filter by status and include status field
   const loadUserEvents = async (userId: string) => {
     try {
+      // Status filter based on checkbox
+      const statusFilter = showPassiveEvents
+        ? ['active', 'passive']
+        : ['active'];
+
       // event_participants tablosundan kullanıcının katıldığı etkinlikleri al
       const { data, error } = await supabase
         .from('event_participants')
@@ -111,13 +127,14 @@ const Events: React.FC = () => {
             place_city,
             planned_start_date,
             planned_duration_days,
-            created_at
+            created_at,
+            status
           )
         `
         )
         .eq('user_id', userId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
+        .eq('status', 'active') // participant status must be active
+        .in('events.status', statusFilter); // filter events by status
 
       if (error) {
         console.error('Error loading user events:', error);
@@ -127,8 +144,15 @@ const Events: React.FC = () => {
 
       // EventParticipant array'ını Event array'ına dönüştür
       const userEvents = data
-        .filter((participant: EventParticipant) => participant.events) // events null değilse
-        .map((participant: EventParticipant) => participant.events);
+        .filter(
+          (participant: EventParticipant) =>
+            participant.events && participant.events.status !== 'deleted' // Extra safety: never show deleted
+        )
+        .map((participant: EventParticipant) => participant.events)
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
 
       setEvents(userEvents);
     } catch (err) {
@@ -150,6 +174,15 @@ const Events: React.FC = () => {
     if (!days) return t('not_specified');
     return `${days} ${days === 1 ? t('day') : t('days')}`;
   };
+
+  // ✅ Filter events by status for display
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      if (event.status === 'deleted') return false; // Never show deleted
+      if (!showPassiveEvents && event.status === 'passive') return false;
+      return true;
+    });
+  }, [events, showPassiveEvents]);
 
   const styles = useMemo(
     () => ({
@@ -229,6 +262,59 @@ const Events: React.FC = () => {
         marginTop: '8px'
       },
 
+      // ✅ Filter section styles
+      filterSection: {
+        background: 'rgba(26, 26, 46, 0.85)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '16px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)',
+        padding: '20px',
+        marginBottom: '20px'
+      },
+
+      filterContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '12px'
+      },
+
+      checkboxContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        cursor: 'pointer',
+        userSelect: 'none' as const,
+        WebkitTapHighlightColor: 'transparent'
+      },
+
+      checkbox: {
+        appearance: 'none' as const,
+        WebkitAppearance: 'none' as const,
+        width: '20px',
+        height: '20px',
+        borderRadius: '4px',
+        border: '2px solid rgba(255, 255, 255, 0.3)',
+        background: 'rgba(255, 255, 255, 0.05)',
+        position: 'relative' as const,
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        outline: 'none'
+      },
+
+      checkboxChecked: {
+        background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+        borderColor: '#00f5ff'
+      },
+
+      checkboxLabel: {
+        color: 'rgba(255, 255, 255, 0.9)',
+        fontSize: '14px',
+        fontWeight: '500',
+        cursor: 'pointer'
+      },
+
       eventsContent: {
         background: 'rgba(26, 26, 46, 0.85)',
         backdropFilter: 'blur(20px)',
@@ -254,6 +340,13 @@ const Events: React.FC = () => {
         position: 'relative' as const
       },
 
+      // ✅ Passive event card styles
+      eventCardPassive: {
+        background: 'rgba(255, 255, 255, 0.02)',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        opacity: 0.6
+      },
+
       eventTitle: {
         color: 'white',
         fontSize: '1.1rem',
@@ -261,10 +354,34 @@ const Events: React.FC = () => {
         marginBottom: '8px'
       },
 
+      // ✅ Passive event title styles
+      eventTitlePassive: {
+        color: 'rgba(255, 255, 255, 0.6)'
+      },
+
       eventInfo: {
         color: 'rgba(255, 255, 255, 0.8)',
         fontSize: '13px',
         marginBottom: '4px'
+      },
+
+      // ✅ Passive event info styles
+      eventInfoPassive: {
+        color: 'rgba(255, 255, 255, 0.4)'
+      },
+
+      // ✅ Status badge
+      statusBadge: {
+        position: 'absolute' as const,
+        top: '12px',
+        right: '12px',
+        background: 'rgba(255, 165, 0, 0.2)',
+        color: '#ffa500',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        fontSize: '10px',
+        fontWeight: '600',
+        textTransform: 'uppercase' as const
       },
 
       emptyState: {
@@ -482,6 +599,18 @@ const Events: React.FC = () => {
           }
         }
 
+        /* ✅ Checkbox checkmark */
+        input[type="checkbox"]:checked::after {
+          content: "✓";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          color: white;
+          font-size: 12px;
+          font-weight: bold;
+        }
+
         @media (max-width: 768px) {
           .events-container {
             padding: 16px !important;
@@ -496,6 +625,9 @@ const Events: React.FC = () => {
           }
           .events-content {
             padding: 20px !important;
+          }
+          .filter-section {
+            padding: 16px !important;
           }
           .header-title {
             font-size: 1.75rem !important;
@@ -516,6 +648,10 @@ const Events: React.FC = () => {
           }
           .header-title {
             font-size: 1.5rem !important;
+          }
+          .filter-container {
+            flex-direction: column !important;
+            gap: 8px !important;
           }
         }
 
@@ -538,7 +674,8 @@ const Events: React.FC = () => {
         /* High contrast mode support */
         @media (prefers-contrast: high) {
           .header,
-          .events-content {
+          .events-content,
+          .filter-section {
             border: 2px solid rgba(255, 255, 255, 0.3) !important;
           }
         }
@@ -587,19 +724,44 @@ const Events: React.FC = () => {
           <p style={styles.headerSubtitle}>{t('events_you_participate_in')}</p>
         </div>
 
+        {/* ✅ Filter Section */}
+        <div style={styles.filterSection} className="filter-section">
+          <div style={styles.filterContainer} className="filter-container">
+            <div
+              style={styles.checkboxContainer}
+              onClick={() => setShowPassiveEvents(!showPassiveEvents)}
+            >
+              <input
+                type="checkbox"
+                checked={showPassiveEvents}
+                onChange={(e) => setShowPassiveEvents(e.target.checked)}
+                style={{
+                  ...styles.checkbox,
+                  ...(showPassiveEvents ? styles.checkboxChecked : {})
+                }}
+              />
+              <label style={styles.checkboxLabel}>
+                {t('show_passive_events')}
+              </label>
+            </div>
+          </div>
+        </div>
+
         {/* Events Content */}
         <div style={styles.eventsContent} className="events-content">
           {loading ? (
             <div style={styles.loading}>{t('loading_events')}</div>
-          ) : events.length === 0 ? (
+          ) : filteredEvents.length === 0 ? (
             <div style={styles.emptyState}>
               <div style={styles.emptyStateIcon}>🎉</div>
               <div style={styles.emptyStateText}>
-                {t('no_events_participated')}
+                {showPassiveEvents
+                  ? t('no_events_found_with_filter')
+                  : t('no_events_participated')}
               </div>
               <button
                 style={styles.createEventButton}
-                onClick={() => navigate('/create-event')}
+                onClick={() => navigate('/add-event')}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
                   e.currentTarget.style.boxShadow =
@@ -615,44 +777,106 @@ const Events: React.FC = () => {
             </div>
           ) : (
             <div style={styles.eventsList} className="events-list">
-              {events.map((event) => (
-                <div
-                  key={event.id}
-                  style={styles.eventCard}
-                  onClick={() => navigate(`/events/${event.id}`)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background =
-                      'rgba(255, 255, 255, 0.08)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background =
-                      'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <div style={styles.eventTitle}>{event.name}</div>
-                  <div style={styles.eventInfo}>
-                    {t('event_category_label')}:{' '}
-                    {t(`event_category_option_${event.category}`)}
+              {filteredEvents.map((event) => {
+                const isPassive = event.status === 'passive';
+
+                return (
+                  <div
+                    key={event.id}
+                    style={{
+                      ...styles.eventCard,
+                      ...(isPassive ? styles.eventCardPassive : {})
+                    }}
+                    onClick={() => navigate(`/events/${event.id}`)}
+                    onMouseEnter={(e) => {
+                      if (isPassive) {
+                        e.currentTarget.style.background =
+                          'rgba(255, 255, 255, 0.04)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                      } else {
+                        e.currentTarget.style.background =
+                          'rgba(255, 255, 255, 0.08)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (isPassive) {
+                        e.currentTarget.style.background =
+                          'rgba(255, 255, 255, 0.02)';
+                      } else {
+                        e.currentTarget.style.background =
+                          'rgba(255, 255, 255, 0.05)';
+                      }
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    {/* ✅ Status badge for passive events */}
+                    {isPassive && (
+                      <div style={styles.statusBadge}>
+                        {t('status_passive')}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        ...styles.eventTitle,
+                        ...(isPassive ? styles.eventTitlePassive : {})
+                      }}
+                    >
+                      {event.name}
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.eventInfo,
+                        ...(isPassive ? styles.eventInfoPassive : {})
+                      }}
+                    >
+                      {t('event_category_label')}:{' '}
+                      {t(`event_category_option_${event.category}`)}
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.eventInfo,
+                        ...(isPassive ? styles.eventInfoPassive : {})
+                      }}
+                    >
+                      {t('event_date_label')}:{' '}
+                      {formatDate(event.planned_start_date)}
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.eventInfo,
+                        ...(isPassive ? styles.eventInfoPassive : {})
+                      }}
+                    >
+                      {t('event_duration_label')}:{' '}
+                      {formatDuration(event.planned_duration_days)}
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.eventInfo,
+                        ...(isPassive ? styles.eventInfoPassive : {})
+                      }}
+                    >
+                      {t('event_location_label')}: {event.place_country} -{' '}
+                      {event.place_city}
+                    </div>
+
+                    <div
+                      style={{
+                        ...styles.eventInfo,
+                        ...(isPassive ? styles.eventInfoPassive : {})
+                      }}
+                    >
+                      {t('default_currency_label')}: {event.default_currency}
+                    </div>
                   </div>
-                  <div style={styles.eventInfo}>
-                    {t('event_date_label')}:{' '}
-                    {formatDate(event.planned_start_date)}
-                  </div>
-                  <div style={styles.eventInfo}>
-                    {t('event_duration_label')}:{' '}
-                    {formatDuration(event.planned_duration_days)}
-                  </div>
-                  <div style={styles.eventInfo}>
-                    {t('event_location_label')}: {event.place_country} -{' '}
-                    {event.place_city}
-                  </div>
-                  <div style={styles.eventInfo}>
-                    {t('default_currency_label')}: {event.default_currency}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

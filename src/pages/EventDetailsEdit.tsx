@@ -32,6 +32,239 @@ interface EventParticipant {
   };
 }
 
+interface ConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  type: 'delete' | 'passive' | 'remove';
+  loading?: boolean;
+}
+
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmText,
+  cancelText,
+  type,
+  loading = false
+}) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) {
+        onClose();
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        modalRef.current &&
+        !modalRef.current.contains(e.target as Node) &&
+        !loading
+      ) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      document.addEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen, onClose, loading]);
+
+  if (!isOpen) return null;
+
+  const getButtonColors = () => {
+    switch (type) {
+      case 'delete':
+        return {
+          confirm: 'linear-gradient(45deg, #ff6b6b, #ff3333)',
+          confirmHover: '0 10px 30px rgba(255, 107, 107, 0.4)'
+        };
+      case 'passive':
+        return {
+          confirm: 'linear-gradient(45deg, #ffa500, #ff8c00)',
+          confirmHover: '0 10px 30px rgba(255, 165, 0, 0.4)'
+        };
+      case 'remove':
+        return {
+          confirm: 'linear-gradient(45deg, #ff6b6b, #ff3333)',
+          confirmHover: '0 10px 30px rgba(255, 107, 107, 0.4)'
+        };
+      default:
+        return {
+          confirm: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+          confirmHover: '0 10px 30px rgba(0, 245, 255, 0.4)'
+        };
+    }
+  };
+
+  const colors = getButtonColors();
+
+  const modalStyles = {
+    overlay: {
+      position: 'fixed' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.8)',
+      backdropFilter: 'blur(10px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10000,
+      padding: '20px',
+      opacity: isOpen ? 1 : 0,
+      visibility: isOpen ? 'visible' : 'hidden',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+    },
+    modal: {
+      background: 'rgba(26, 26, 46, 0.95)',
+      backdropFilter: 'blur(20px)',
+      borderRadius: '20px',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+      padding: '32px',
+      maxWidth: '400px',
+      width: '100%',
+      position: 'relative' as const,
+      transform: isOpen
+        ? 'scale(1) translateY(0)'
+        : 'scale(0.9) translateY(20px)',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      maxHeight: '90vh',
+      overflow: 'auto'
+    },
+    title: {
+      fontSize: '1.5rem',
+      fontWeight: '700',
+      color: 'white',
+      marginBottom: '16px',
+      textAlign: 'center' as const,
+      background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text'
+    },
+    message: {
+      fontSize: '1rem',
+      color: 'rgba(255, 255, 255, 0.8)',
+      marginBottom: '32px',
+      textAlign: 'center' as const,
+      lineHeight: '1.5'
+    },
+    buttons: {
+      display: 'flex',
+      gap: '12px',
+      flexDirection: 'column' as const
+    },
+    button: {
+      padding: '14px 24px',
+      borderRadius: '12px',
+      fontSize: '16px',
+      fontWeight: '600',
+      border: 'none',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+      userSelect: 'none' as const,
+      WebkitTapHighlightColor: 'transparent',
+      minHeight: '48px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    confirmButton: {
+      background: colors.confirm,
+      color: 'white'
+    },
+    cancelButton: {
+      background: 'rgba(255, 255, 255, 0.1)',
+      color: 'white',
+      border: '1px solid rgba(255, 255, 255, 0.2)'
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+      cursor: 'not-allowed'
+    }
+  };
+
+  return (
+    <div style={modalStyles.overlay}>
+      <div ref={modalRef} style={modalStyles.modal}>
+        <h2 style={modalStyles.title}>{title}</h2>
+        <p style={modalStyles.message}>{message}</p>
+
+        <div style={modalStyles.buttons}>
+          <button
+            style={{
+              ...modalStyles.button,
+              ...modalStyles.confirmButton,
+              ...(loading ? modalStyles.buttonDisabled : {})
+            }}
+            onClick={onConfirm}
+            disabled={loading}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = colors.confirmHover;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }
+            }}
+          >
+            {loading ? '...' : confirmText}
+          </button>
+
+          <button
+            style={{
+              ...modalStyles.button,
+              ...modalStyles.cancelButton,
+              ...(loading ? modalStyles.buttonDisabled : {})
+            }}
+            onClick={onClose}
+            disabled={loading}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }
+            }}
+          >
+            {cancelText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
   options,
   value,
@@ -211,11 +444,22 @@ const EventDetailsEdit: React.FC = () => {
     ''
   );
 
-  // ✅ Katılımcı listesi için state
+  // Participants state
   const [participants, setParticipants] = useState<EventParticipant[]>([]);
   const [removingParticipant, setRemovingParticipant] = useState<string | null>(
     null
   );
+
+  // Modal states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showPassiveModal, setShowPassiveModal] = useState(false);
+  const [showRemoveParticipantModal, setShowRemoveParticipantModal] =
+    useState(false);
+  const [participantToRemove, setParticipantToRemove] = useState<{
+    id: string;
+    userId: string;
+    name: string;
+  } | null>(null);
 
   const eventCategories = [
     { value: 'long_vacation', label: t('event_category_option_long_vacation') },
@@ -266,12 +510,10 @@ const EventDetailsEdit: React.FC = () => {
     i18n.changeLanguage(lng);
   };
 
-  // ✅ Kullanıcı kontrolü ve veri yükleme
   const checkUserAndLoadData = async () => {
     try {
       setLoading(true);
 
-      // Kullanıcı kimlik kontrolü
       const {
         data: { user },
         error: authError
@@ -286,7 +528,6 @@ const EventDetailsEdit: React.FC = () => {
 
       setCurrentUser(user);
 
-      // Kullanıcının bu etkinlikte admin yetkisi var mı kontrol et
       const { data: participantData, error: participantError } = await supabase
         .from('event_participants')
         .select('role')
@@ -344,10 +585,8 @@ const EventDetailsEdit: React.FC = () => {
     }
   };
 
-  // ✅ Katılımcıları yükle
   const loadParticipants = async () => {
     try {
-      // Önce participants'ları yükle
       const { data: participantsData, error: participantsError } =
         await supabase
           .from('event_participants')
@@ -367,7 +606,6 @@ const EventDetailsEdit: React.FC = () => {
         return;
       }
 
-      // Sonra her participant için user bilgilerini yükle
       const participantsWithUsers = await Promise.all(
         participantsData.map(async (participant) => {
           const { data: userData, error: userError } = await supabase
@@ -394,8 +632,8 @@ const EventDetailsEdit: React.FC = () => {
     }
   };
 
-  // ✅ Katılımcı çıkar
-  const handleRemoveParticipant = async (
+  // Updated remove participant function with modal
+  const handleRemoveParticipantClick = (
     participantId: string,
     participantUserId: string
   ) => {
@@ -410,18 +648,24 @@ const EventDetailsEdit: React.FC = () => {
     const userName =
       `${participant.users.first_name} ${participant.users.last_name}`.trim();
 
-    // Onay iste
-    if (!window.confirm(t('confirm_remove_participant', { name: userName }))) {
-      return;
-    }
+    setParticipantToRemove({
+      id: participantId,
+      userId: participantUserId,
+      name: userName || participant.users.email
+    });
+    setShowRemoveParticipantModal(true);
+  };
+
+  const handleRemoveParticipantConfirm = async () => {
+    if (!participantToRemove) return;
 
     try {
-      setRemovingParticipant(participantId);
+      setRemovingParticipant(participantToRemove.id);
 
       const { error } = await supabase
         .from('event_participants')
         .update({ status: 'removed' })
-        .eq('id', participantId);
+        .eq('id', participantToRemove.id);
 
       if (error) {
         console.error('Error removing participant:', error);
@@ -430,7 +674,9 @@ const EventDetailsEdit: React.FC = () => {
       }
 
       toast.success(t('participant_removed_successfully'));
-      await loadParticipants(); // Listeyi yenile
+      await loadParticipants();
+      setShowRemoveParticipantModal(false);
+      setParticipantToRemove(null);
     } catch (err) {
       console.error('Error removing participant:', err);
       toast.error(t('failed_remove_participant'));
@@ -477,12 +723,8 @@ const EventDetailsEdit: React.FC = () => {
     }
   };
 
-  // ✅ Etkinliği sil (status = deleted)
-  const handleDeleteEvent = async () => {
-    if (!window.confirm(t('confirm_delete_event'))) {
-      return;
-    }
-
+  // Updated delete event function with modal
+  const handleDeleteEventConfirm = async () => {
     try {
       setSaving(true);
 
@@ -499,6 +741,7 @@ const EventDetailsEdit: React.FC = () => {
 
       toast.success(t('event_deleted_successfully'));
       navigate('/events');
+      setShowDeleteModal(false);
     } catch (err) {
       console.error('Error deleting event:', err);
       toast.error(t('failed_delete_event'));
@@ -507,12 +750,8 @@ const EventDetailsEdit: React.FC = () => {
     }
   };
 
-  // ✅ Etkinliği pasif yap (status = passive)
-  const handleMakePassive = async () => {
-    if (!window.confirm(t('confirm_make_passive_event'))) {
-      return;
-    }
-
+  // Updated make passive function with modal
+  const handleMakePassiveConfirm = async () => {
     try {
       setSaving(true);
 
@@ -529,6 +768,7 @@ const EventDetailsEdit: React.FC = () => {
 
       toast.success(t('event_made_passive_successfully'));
       navigate(`/events/${eventId}`);
+      setShowPassiveModal(false);
     } catch (err) {
       console.error('Error making event passive:', err);
       toast.error(t('failed_make_passive_event'));
@@ -679,7 +919,6 @@ const EventDetailsEdit: React.FC = () => {
         background: 'rgba(255, 255, 255, 0.08)'
       },
 
-      // ✅ Katılımcı listesi stilleri
       participantsSection: {
         marginTop: '32px',
         marginBottom: '24px'
@@ -716,7 +955,7 @@ const EventDetailsEdit: React.FC = () => {
 
       participantInfo: {
         flex: 1,
-        minWidth: 0, // Important for text truncation
+        minWidth: 0,
         overflow: 'hidden'
       },
 
@@ -807,7 +1046,6 @@ const EventDetailsEdit: React.FC = () => {
         boxShadow: '0 10px 30px rgba(0, 245, 255, 0.4)'
       },
 
-      // ✅ Status butonları
       statusButtons: {
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
@@ -1226,7 +1464,7 @@ const EventDetailsEdit: React.FC = () => {
               />
             </div>
 
-            {/* ✅ Event Description */}
+            {/* Event Description */}
             <div style={styles.inputGroup}>
               <label style={styles.label}>{t('event_description_label')}</label>
               <textarea
@@ -1319,7 +1557,7 @@ const EventDetailsEdit: React.FC = () => {
               </div>
             </div>
 
-            {/* ✅ Katılımcı Listesi */}
+            {/* Participants List */}
             <div style={styles.participantsSection}>
               <h3 style={styles.sectionTitle}>{t('event_participants')}</h3>
 
@@ -1361,7 +1599,6 @@ const EventDetailsEdit: React.FC = () => {
                         </div>
 
                         <div style={styles.participantActions}>
-                          {/* ✅ Sadece admin role'ü göster */}
                           {participant.role === 'admin' && (
                             <span style={styles.participantRole}>
                               {t('role_admin')}
@@ -1377,7 +1614,7 @@ const EventDetailsEdit: React.FC = () => {
                                   : {})
                               }}
                               onClick={() =>
-                                handleRemoveParticipant(
+                                handleRemoveParticipantClick(
                                   participant.id,
                                   participant.user_id
                                 )
@@ -1428,7 +1665,7 @@ const EventDetailsEdit: React.FC = () => {
               {saving ? t('saving_event') : t('save_event_button')}
             </button>
 
-            {/* ✅ Status Butonları */}
+            {/* Status Buttons */}
             <div style={styles.statusButtons} className="status-buttons">
               <button
                 style={{
@@ -1437,7 +1674,7 @@ const EventDetailsEdit: React.FC = () => {
                   ...(saving ? styles.buttonDisabled : {}),
                   marginBottom: 0
                 }}
-                onClick={handleMakePassive}
+                onClick={() => setShowPassiveModal(true)}
                 disabled={saving}
                 onMouseEnter={(e) => {
                   if (!saving) {
@@ -1461,7 +1698,7 @@ const EventDetailsEdit: React.FC = () => {
                   ...(saving ? styles.buttonDisabled : {}),
                   marginBottom: 0
                 }}
-                onClick={handleDeleteEvent}
+                onClick={() => setShowDeleteModal(true)}
                 disabled={saving}
                 onMouseEnter={(e) => {
                   if (!saving) {
@@ -1481,6 +1718,48 @@ const EventDetailsEdit: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteEventConfirm}
+        title={t('confirm_delete_event_title')}
+        message={t('confirm_delete_event')}
+        confirmText={t('delete_event_button')}
+        cancelText={t('cancel')}
+        type="delete"
+        loading={saving}
+      />
+
+      <ConfirmationModal
+        isOpen={showPassiveModal}
+        onClose={() => setShowPassiveModal(false)}
+        onConfirm={handleMakePassiveConfirm}
+        title={t('confirm_make_passive_title')}
+        message={t('confirm_make_passive_event')}
+        confirmText={t('make_passive_button')}
+        cancelText={t('cancel')}
+        type="passive"
+        loading={saving}
+      />
+
+      <ConfirmationModal
+        isOpen={showRemoveParticipantModal}
+        onClose={() => {
+          setShowRemoveParticipantModal(false);
+          setParticipantToRemove(null);
+        }}
+        onConfirm={handleRemoveParticipantConfirm}
+        title={t('confirm_remove_participant_title')}
+        message={t('confirm_remove_participant', {
+          name: participantToRemove?.name || ''
+        })}
+        confirmText={t('remove')}
+        cancelText={t('cancel')}
+        type="remove"
+        loading={removingParticipant === participantToRemove?.id}
+      />
 
       <BottomNavigation />
     </div>

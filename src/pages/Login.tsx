@@ -470,6 +470,46 @@ const Login: React.FC = () => {
       borderRadius: '50%',
       background: isOnline ? '#4CAF50' : '#f44336',
       boxShadow: `0 0 10px ${isOnline ? '#4CAF50' : '#f44336'}`
+    },
+
+    // ✅ YENİ STYLES - Register Link Section
+    registerLink: {
+      textAlign: 'center' as const,
+      marginTop: '2rem',
+      padding: '1.5rem 1rem 0.5rem 1rem',
+      borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+    },
+
+    registerLinkText: {
+      color: 'rgba(255, 255, 255, 0.7)',
+      fontSize: '14px',
+      marginBottom: '12px',
+      fontWeight: '400'
+    },
+
+    registerLinkButton: {
+      background: 'transparent',
+      border: '1px solid rgba(0, 245, 255, 0.3)',
+      borderRadius: '10px',
+      padding: '12px 24px',
+      color: '#00f5ff',
+      fontSize: '14px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      textDecoration: 'none',
+      userSelect: 'none' as const,
+      WebkitTapHighlightColor: 'transparent',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px'
+    },
+
+    registerLinkButtonHover: {
+      background: 'rgba(0, 245, 255, 0.1)',
+      borderColor: '#00f5ff',
+      transform: 'translateY(-1px)',
+      boxShadow: '0 4px 12px rgba(0, 245, 255, 0.2)'
     }
   };
 
@@ -836,6 +876,30 @@ const Login: React.FC = () => {
               }}
             >
               {resetLoading ? t('sending') : t('forgot_password')}
+            </button>
+          </div>
+
+          {/* ✅ YENİ - Register Link Section */}
+          <div style={styles.registerLink}>
+            <div style={styles.registerLinkText}>{t('dont_have_account')}</div>
+            <button
+              style={styles.registerLinkButton}
+              onClick={() => (window.location.href = '/register')}
+              onMouseEnter={(e) => {
+                Object.assign(
+                  e.currentTarget.style,
+                  styles.registerLinkButtonHover
+                );
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'rgba(0, 245, 255, 0.3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <span>→</span>
+              {t('register_instead')}
             </button>
           </div>
         </div>

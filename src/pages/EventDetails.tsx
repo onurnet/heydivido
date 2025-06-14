@@ -410,13 +410,7 @@ const EventDetails: React.FC = () => {
 
   // NEW: Handle participants modal
   const handleShowParticipants = async () => {
-    console.log('🔥 handleShowParticipants CLICKED!');
-    console.log(
-      '🔥 Before setState - showParticipantsModal:',
-      showParticipantsModal
-    );
     setShowParticipantsModal(true);
-    console.log('🔥 After setState called');
     await loadParticipantsDetails();
   };
 
@@ -689,29 +683,6 @@ const EventDetails: React.FC = () => {
         backgroundClip: 'text'
       },
 
-      actionButtons: {
-        display: 'flex',
-        gap: '8px'
-      },
-
-      actionButton: {
-        width: '40px',
-        height: '40px',
-        background: 'rgba(255, 255, 255, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        borderRadius: '10px',
-        color: '#e2e8f0',
-        fontSize: '16px',
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backdropFilter: 'blur(10px)',
-        userSelect: 'none' as const,
-        WebkitTapHighlightColor: 'transparent'
-      },
-
       eventInfoCard: {
         background: 'rgba(26, 26, 46, 0.85)',
         backdropFilter: 'blur(20px)',
@@ -731,6 +702,37 @@ const EventDetails: React.FC = () => {
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text'
+      },
+
+      // NEW: Section header with action buttons
+      sectionHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '16px'
+      },
+
+      actionButtons: {
+        display: 'flex',
+        gap: '8px'
+      },
+
+      actionButton: {
+        width: '36px',
+        height: '36px',
+        background: 'rgba(255, 255, 255, 0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        borderRadius: '8px',
+        color: '#e2e8f0',
+        fontSize: '14px',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backdropFilter: 'blur(10px)',
+        userSelect: 'none' as const,
+        WebkitTapHighlightColor: 'transparent'
       },
 
       infoGrid: {
@@ -756,6 +758,16 @@ const EventDetails: React.FC = () => {
         transition: 'all 0.3s ease'
       },
 
+      // NEW: Payments/Settlements info item with different tone
+      infoItemPayments: {
+        padding: '12px',
+        background: 'rgba(255, 107, 107, 0.08)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 107, 107, 0.2)',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease'
+      },
+
       infoLabel: {
         color: '#00f5ff',
         fontSize: '12px',
@@ -767,6 +779,20 @@ const EventDetails: React.FC = () => {
         color: 'white',
         fontSize: '14px',
         fontWeight: '500'
+      },
+
+      // NEW: Payments/Settlements label and value styles
+      infoLabelPayments: {
+        color: '#ff6b6b',
+        fontSize: '12px',
+        fontWeight: '600',
+        marginBottom: '6px'
+      },
+
+      infoValuePayments: {
+        color: '#ff6b6b',
+        fontSize: '14px',
+        fontWeight: '600'
       },
 
       expensesCard: {
@@ -879,22 +905,22 @@ const EventDetails: React.FC = () => {
         zIndex: 3
       },
 
-      // NEW: Participants modal styles
-      overlay: {
+      // Participants modal styles (similar to currency confirmation)
+      modalOverlay: {
         position: 'fixed' as const,
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(255, 0, 0, 0.9)', // RED background to make it super visible
+        background: 'rgba(0, 0, 0, 0.8)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 99999, // Increased z-index
+        zIndex: 10000,
         backdropFilter: 'blur(10px)'
       },
 
-      modal: {
+      modalDialog: {
         background: 'rgba(26, 26, 46, 0.95)',
         backdropFilter: 'blur(20px)',
         borderRadius: '20px',
@@ -903,41 +929,33 @@ const EventDetails: React.FC = () => {
         padding: '24px',
         maxWidth: '400px',
         width: '90%',
-        maxHeight: '80vh',
+        maxHeight: '70vh',
         overflowY: 'auto' as const,
         margin: '20px',
         color: 'white'
       },
 
-      modalHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px',
-        paddingBottom: '16px',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-      },
-
       modalTitle: {
-        fontSize: '1.3rem',
+        fontSize: '1.5rem',
         fontWeight: '700',
+        marginBottom: '16px',
         background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
         backgroundClip: 'text'
       },
 
-      closeButton: {
-        background: 'rgba(255, 255, 255, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        borderRadius: '8px',
-        padding: '8px 12px',
-        color: '#e2e8f0',
-        fontSize: '14px',
-        fontWeight: '500',
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
-        backdropFilter: 'blur(10px)'
+      modalMessage: {
+        fontSize: '16px',
+        lineHeight: '1.5',
+        marginBottom: '20px',
+        color: 'rgba(255, 255, 255, 0.9)'
+      },
+
+      participantsList: {
+        maxHeight: '300px',
+        overflowY: 'auto' as const,
+        marginBottom: '20px'
       },
 
       participantItem: {
@@ -961,11 +979,23 @@ const EventDetails: React.FC = () => {
         color: 'rgba(255, 255, 255, 0.7)'
       },
 
-      emptyParticipants: {
-        textAlign: 'center' as const,
-        color: 'rgba(255, 255, 255, 0.6)',
+      modalButtons: {
+        display: 'flex',
+        gap: '12px',
+        justifyContent: 'flex-end'
+      },
+
+      modalButton: {
+        padding: '12px 24px',
+        borderRadius: '8px',
         fontSize: '14px',
-        padding: '20px'
+        fontWeight: '600',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        border: 'none',
+        minWidth: '80px',
+        background: 'linear-gradient(45deg, #00f5ff, #ff006e)',
+        color: 'white'
       }
     }),
     [isOnline]
@@ -1034,75 +1064,60 @@ const EventDetails: React.FC = () => {
     ]
   );
 
-  // NEW: Participants modal component
-  const ParticipantsModal = () => {
-    console.log(
-      '🚀 ParticipantsModal render - showParticipantsModal:',
-      showParticipantsModal
-    );
-
-    if (!showParticipantsModal) {
-      console.log(
-        '❌ Modal not showing because showParticipantsModal is false'
-      );
-      return null;
-    }
-
-    console.log('✅ Modal should be visible now!');
+  // Participants modal (similar to currency confirmation modal)
+  const ParticipantsModal = useMemo(() => {
+    if (!showParticipantsModal) return null;
 
     return (
-      <div
-        style={styles.overlay}
-        onClick={() => {
-          console.log('🔥 Overlay clicked - closing modal');
-          setShowParticipantsModal(false);
-        }}
-      >
-        <div
-          style={styles.modal}
-          onClick={(e) => {
-            console.log('🔥 Modal content clicked - preventing close');
-            e.stopPropagation();
-          }}
-        >
-          <div style={styles.modalHeader}>
-            <h3 style={styles.modalTitle}>
-              🎯 TEST MODAL - Participants ({participantCount})
-            </h3>
+      <div style={styles.modalOverlay}>
+        <div style={styles.modalDialog}>
+          <h3 style={styles.modalTitle}>
+            {t('participants_list_title')} ({participantCount})
+          </h3>
+
+          {participantsList.length === 0 ? (
+            <p style={styles.modalMessage}>{t('loading_participants')}...</p>
+          ) : (
+            <>
+              <p style={styles.modalMessage}>{t('participants_in_event')}:</p>
+              <div style={styles.participantsList}>
+                {participantsList.map((participant, index) => {
+                  const displayName = getUserDisplayName(participant, t);
+                  const isEmailAsName =
+                    !participant.first_name &&
+                    !participant.last_name &&
+                    participant.email;
+
+                  return (
+                    <div key={participant.id} style={styles.participantItem}>
+                      <div style={styles.participantName}>
+                        {index + 1}. {displayName}
+                      </div>
+                      {/* Only show email if it's not already being used as the display name */}
+                      {!isEmailAsName && (
+                        <div style={styles.participantEmail}>
+                          📧 {participant.email || t('no_email')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <div style={styles.modalButtons}>
             <button
-              style={styles.closeButton}
-              onClick={() => {
-                console.log('🔥 Close button clicked');
-                setShowParticipantsModal(false);
-              }}
+              style={styles.modalButton}
+              onClick={() => setShowParticipantsModal(false)}
             >
-              ✖ Close
+              {t('close')}
             </button>
-          </div>
-
-          <div>
-            <div style={styles.emptyParticipants}>
-              🔍 Modal is working! Participant count: {participantCount}
-              <br />
-              Participants list length: {participantsList.length}
-            </div>
-
-            {participantsList.length > 0 &&
-              participantsList.map((participant) => (
-                <div key={participant.id} style={styles.participantItem}>
-                  <div style={styles.participantName}>
-                    {getUserDisplayName(participant, t)}
-                  </div>
-                  <div style={styles.participantEmail}>
-                    {participant.email || 'No email'}
-                  </div>
-                </div>
-              ))}
           </div>
         </div>
       </div>
     );
-  };
+  }, [showParticipantsModal, participantCount, participantsList, styles, t]);
 
   // Global styles
   const GlobalStyles = useMemo(
@@ -1179,6 +1194,11 @@ const EventDetails: React.FC = () => {
           .expenses-card {
             padding: 20px !important;
           }
+          .section-header {
+            flex-direction: column !important;
+            gap: 12px !important;
+            align-items: flex-start !important;
+          }
         }
 
         @media (max-width: 480px) {
@@ -1197,9 +1217,9 @@ const EventDetails: React.FC = () => {
             font-size: 1.1rem !important;
           }
           .action-button {
-            width: 36px !important;
-            height: 36px !important;
-            font-size: 14px !important;
+            width: 32px !important;
+            height: 32px !important;
+            font-size: 12px !important;
           }
         }
 
@@ -1233,20 +1253,12 @@ const EventDetails: React.FC = () => {
     []
   );
 
-  console.log(
-    '🎯 EventDetails RENDER - showParticipantsModal:',
-    showParticipantsModal
-  );
-
   if (loading) {
     return (
       <div style={styles.container}>
         {GlobalStyles}
         {FloatingElements}
         {LanguageSelector}
-
-        {/* NEW: Participants Modal */}
-        {ParticipantsModal}
         <div style={styles.eventContainer}>
           <div style={styles.loading}>{t('loading_event_details')}</div>
         </div>
@@ -1280,13 +1292,16 @@ const EventDetails: React.FC = () => {
 
       {LanguageSelector}
 
+      {/* Participants Modal */}
+      {ParticipantsModal}
+
       <div style={styles.eventContainer}>
         <div
           style={styles.networkIndicator}
           title={isOnline ? 'Online' : 'Offline'}
         ></div>
 
-        {/* Header */}
+        {/* Header - Now only contains back button and event title */}
         <div style={styles.header} className="header">
           <button
             style={styles.backButton}
@@ -1306,46 +1321,52 @@ const EventDetails: React.FC = () => {
           <h1 style={styles.eventTitle} className="event-title">
             {event.name}
           </h1>
-
-          <div style={styles.actionButtons} className="action-buttons">
-            <button
-              style={styles.actionButton}
-              className="action-button"
-              onClick={handleEditEvent}
-              title={t('edit_event_button')}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-              }}
-            >
-              ✏️
-            </button>
-            <button
-              style={styles.actionButton}
-              className="action-button"
-              onClick={handleShareEvent}
-              title={t('share_event_button')}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-              }}
-            >
-              🔗
-            </button>
-          </div>
         </div>
 
-        {/* Event Info Card - UPDATED with new fields */}
+        {/* Event Info Card - UPDATED with edit and share buttons in section header */}
         <div style={styles.eventInfoCard} className="event-info-card">
-          <h2 style={styles.sectionTitle}>{t('event_details_title')}</h2>
+          <div style={styles.sectionHeader} className="section-header">
+            <h2 style={styles.sectionTitle}>{t('event_details_title')}</h2>
+            <div style={styles.actionButtons} className="action-buttons">
+              <button
+                style={styles.actionButton}
+                className="action-button"
+                onClick={handleEditEvent}
+                title={t('edit_event_button')}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                  e.currentTarget.style.borderColor =
+                    'rgba(255, 255, 255, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.borderColor =
+                    'rgba(255, 255, 255, 0.2)';
+                }}
+              >
+                ✏️
+              </button>
+              <button
+                style={styles.actionButton}
+                className="action-button"
+                onClick={handleShareEvent}
+                title={t('share_event_button')}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                  e.currentTarget.style.borderColor =
+                    'rgba(255, 255, 255, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.borderColor =
+                    'rgba(255, 255, 255, 0.2)';
+                }}
+              >
+                🔗
+              </button>
+            </div>
+          </div>
+
           <div style={styles.infoGrid} className="info-grid">
             <div style={styles.infoItem}>
               <div style={styles.infoLabel}>{t('event_date_label')}</div>
@@ -1368,22 +1389,13 @@ const EventDetails: React.FC = () => {
             {/* NEW: Participants count - CLICKABLE */}
             <div
               style={styles.infoItemClickable}
-              onClick={(e) => {
-                console.log('🎯 DIV CLICKED!', e);
-                handleShowParticipants();
-              }}
-              onPointerDown={(e) => {
-                console.log('🎯 POINTER DOWN!', e);
-                handleShowParticipants();
-              }}
+              onClick={handleShowParticipants}
               onMouseEnter={(e) => {
-                console.log('🎯 MOUSE ENTER');
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
                 e.currentTarget.style.transform = 'translateY(-1px)';
                 e.currentTarget.style.borderColor = 'rgba(0, 245, 255, 0.2)';
               }}
               onMouseLeave={(e) => {
-                console.log('🎯 MOUSE LEAVE');
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
                 e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
@@ -1393,7 +1405,7 @@ const EventDetails: React.FC = () => {
                 {t('participants_count_label')}
               </div>
               <div style={styles.infoValue}>
-                {formatParticipantCount(participantCount)} 🔥 CLICK ME
+                {formatParticipantCount(participantCount)}
               </div>
             </div>
             {/* NEW: Total expenses */}
@@ -1403,6 +1415,31 @@ const EventDetails: React.FC = () => {
               </div>
               <div style={styles.infoValue}>
                 {formatTotalExpenses(totalExpenses, event.default_currency)}
+              </div>
+            </div>
+            {/* NEW: Payments/Settlements - CLICKABLE with different tone */}
+            <div
+              style={styles.infoItemPayments}
+              onClick={() => navigate(`/events/${eventId}/settlement`)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 107, 107, 0.15)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.borderColor = 'rgba(255, 107, 107, 0.4)';
+                e.currentTarget.style.boxShadow =
+                  '0 8px 25px rgba(255, 107, 107, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 107, 107, 0.08)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.borderColor = 'rgba(255, 107, 107, 0.2)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <div style={styles.infoLabelPayments}>
+                {t('settlements_label')}
+              </div>
+              <div style={styles.infoValuePayments}>
+                {t('view_settlements')} →
               </div>
             </div>
           </div>
@@ -1439,7 +1476,6 @@ const EventDetails: React.FC = () => {
           )}
         </div>
       </div>
-
       <BottomNavigation />
     </div>
   );
